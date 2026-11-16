@@ -1,0 +1,10 @@
+node_modules/
+__pycache__/
+*.pyc
+core-spike-result.json
+preview-result.json
+REVIEW.md
+install-fixture/
+CONTRACT.md
+mods/**/*.d.ts
+mods/**/jsconfig.json

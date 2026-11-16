@@ -1,0 +1,32 @@
+Herdr Approvals
+Copyright 2026 Herdr Approvals contributors
+
+The Codex prompt parser is adapted from:
+quaresc/cockpit, commit 7ae5aa6c16db3547d34b2270d56e4884c09abadd
+herdr/tui/agents/src/prompt.rs
+https://github.com/quaresc/cockpit
+Copyright (c) 2026 quaresc. MIT License; see LICENSES/Cockpit-MIT.txt.
+
+Cockpit identifies that parser as a JavaScript-to-Rust adaptation of
+johnny4young/herdr-relevo lib/prompt.js, Apache License 2.0.
+https://github.com/johnny4young/herdr-relevo
+Changes here: Rust-to-JavaScript adaptation, Codex-only permission recognition,
+complete-command request identity, cursor validation, and ambiguity rejection.
+Apache License 2.0 is included as LICENSE.
+
+Relevant upstream NOTICE, reproduced by Cockpit:
+
+herdr-relevo
+Licensed under the Apache License, Version 2.0 (see LICENSE).
+
+mods/relevo-agents is derived from the `agents` mod that ships with Herdr
+(Apache License 2.0). Changes: account and ticket chips on each agent, read
+from the agent's terminal labels and the Relevo mod's shared setup.
+
+mods/relevo-files is derived from the `files` mod that ships with Herdr
+(Apache License 2.0). Changes: a right-click menu on files and folders (New
+file, New folder, Rename, Move to Trash, Reveal in Finder, Copy path, Copy
+relative path), editing with ⌘S, and a file view in its own pane.
+
+mods/relevo/spinner.svg comes from Herdr's `workspace-chrome` mod
+(Apache License 2.0), unchanged.

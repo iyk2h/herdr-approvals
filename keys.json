@@ -1,0 +1,6 @@
+{
+  "global": {
+    "cmd-alt-a": "approvals.open",
+    "cmd-alt-x": "approvals.cancel"
+  }
+}
