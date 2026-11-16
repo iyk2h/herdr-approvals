@@ -1,21 +1,37 @@
 # Validation
 
-The first implementation was checked on macOS with Herdr app 0.1.16, herdr-core
-0.1.21 and Node 24.5.0. Tests use fictional commands and questions.
+Validation used macOS, Herdr app 0.1.16, herdr-core 0.1.21, and Node 24.
+All prompts and commands in the test fixtures are fictional.
 
-- 67 unit/integration tests cover parser ambiguity, cursor movement, exact countdown,
-  manual/automatic races, durable claims, persistent cancellation, policy changes
-  across panel copies, configurable delay/scope, hidden-selection prevention in
-  settings, and quarantine after uncertain input.
-- Native `herdr-app check` renders the actual mod in checking mode with no IO.
-- A real isolated core runs a fictional permission TUI. The actual NativeProvider
-  reads its screen, the controller claims a CAS record, and `hc keys` submits a
-  reply. The fixture receipt verifies one allow-once input. No Cockpit is present.
-- A second isolated Herdr home renders the panel for `preview.png`, without
-  Cockpit or real input. Its app status reports no mod errors.
-- Installation into a scratch app home succeeds. Reinstalling without --update
-  refuses to overwrite it.
+The automated checks cover these behaviors:
 
-This does not claim a real Codex command was approved or that every Codex version
-has the same UI. Actual Cockpit answer delivery is mocked in provider tests.
-External input races after dispatch remain a core API limitation.
+- 80 tests cover parsing, command identity, cursor movement, countdowns, cancellation, competing replies, durable claims, and uncertain delivery.
+- Agent catalog tests cover selection before a request arrives, inactive selections, and new agents under all or selected scope.
+- Recovery tests discard stale requests after connection errors and preserve durable input records.
+- Shared setting tests stop stale countdowns and prevent hidden replies from the settings tab.
+- Native checks render requests, settings, agent selection, empty state, and uncertain delivery without input or persistent changes.
+- An isolated core reads a fictional TUI and receives exactly one reply through the actual native provider.
+- Separate preview homes render the default settings and agent picker without Cockpit or input.
+
+Installation into a scratch Herdr home succeeds.
+Without `--update`, a second installation stops before it overwrites the mod.
+
+The test does not approve a real Codex command.
+It does not establish support for every Codex version.
+Tests mock actual Cockpit reply delivery.
+External input can still change the prompt after dispatch validation.
+
+Reproduction commands:
+
+```sh
+npm test
+npm run check:package
+python3 tools/native-check.py
+python3 tools/core-spike.py
+python3 tools/preview.py
+python3 tools/preview.py --selected
+```
+
+The core test creates its own session and XDG directories.
+It stops only that core after the test.
+The preview tools use fictional agent metadata and a separate Herdr home.

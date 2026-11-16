@@ -75,6 +75,15 @@ export class ApprovalController {
     this.pendingRow = null;
   }
 
+  discardObservations(error) {
+    this.invalidate();
+    this.rows = [];
+    this.selected = null;
+    this.selectionSnapshot = null;
+    this.status = 'error';
+    this.error = String(error?.message ?? error);
+  }
+
   setEnabled(enabled) {
     const next = Boolean(enabled) && !this.closed;
     if (next === this.enabled) return;
@@ -144,6 +153,8 @@ export class ApprovalController {
       }
       const entries = await this.journal.entries();
       if (!current()) return;
+      this.error = null;
+      if (this.status === 'error') this.status = 'idle';
       const claimed = new Set(entries.map(entry => entry.key));
       const cancelled = new Set(entries.filter(entry => entry.kind === 'cancellation').map(entry => entry.requestKey));
       this.rows = rows.map(row => ({ ...row, quarantined: this.quarantined(row, entries) }));
@@ -176,9 +187,7 @@ export class ApprovalController {
       this.error = null;
     } catch (error) {
       if (!current()) return;
-      this.invalidate();
-      this.status = 'error';
-      this.error = String(error?.message ?? error);
+      this.discardObservations(error);
     }
   }
 

@@ -1,4 +1,5 @@
 from pathlib import Path
+import argparse
 import json
 import os
 import shutil
@@ -7,6 +8,10 @@ import tempfile
 import time
 
 root = Path(__file__).resolve().parents[1]
+parser = argparse.ArgumentParser()
+parser.add_argument('--selected', action='store_true', help='Show the agent picker with fictional agents.')
+options = parser.parse_args()
+image_name = 'agents-preview.png' if options.selected else 'preview.png'
 temporary_root = '/private/tmp' if Path('/private/tmp').is_dir() else '/tmp'
 scratch = Path(tempfile.mkdtemp(prefix='ha-ui-', dir=temporary_root))
 app = shutil.which('herdr-app')
@@ -19,6 +24,10 @@ env['HC_SESSION'] = 'ha-ui-' + str(os.getpid())
 for key in ('XDG_CONFIG_HOME','XDG_CACHE_HOME','XDG_STATE_HOME','XDG_DATA_HOME','XDG_RUNTIME_DIR'):
     directory=scratch/key.lower();directory.mkdir(mode=0o700);env[key]=str(directory)
 shutil.copytree(root/'mods/approvals',scratch/'mods/approvals')
+if options.selected:
+    mod = scratch/'mods/approvals'
+    (mod/'main.js').rename(mod/'view.js')
+    (mod/'main.js').write_text("import Base from './view.js';export default class Preview extends Base{init(p,cx){super.init(p,cx);if(this.tab==='settings'){this.scope='selected';this.selectedSessions=['preview'];this.sessionCatalog.push({...this.sessionCatalog[0],sessionKey:'preview-working',address:'fixture-working',title:'Codex · Build app',status:'working'});}}}")
 (scratch/'layouts').mkdir()
 (scratch/'layouts/approvals-preview.json').write_text(json.dumps({'id':'root','type':'row','divider':{'width':1,'color':'border'},'children':[{'id':'approval-requests','type':'block','size':{'weight':1},'content':{'mod':'approvals','props':{'preview':True,'tab':'requests'}}},{'id':'approval-settings','type':'block','size':{'weight':1},'content':{'mod':'approvals','props':{'preview':True,'tab':'settings'}}}]}))
 (scratch/'shared.json').write_text(json.dumps({'layout':'approvals-preview','frame.welcomed':'skipped'}))
@@ -51,8 +60,8 @@ with (scratch/'preview.log').open('w') as log:
         for overlay in status.get('overlays',[]):
             command(['do','overlay.close',json.dumps({'id':overlay.get('id') if isinstance(overlay,dict) else overlay})])
         time.sleep(0.5)
-        command(['shot',str(root/'preview.png')])
-        result={'isolated_app_home':str(scratch),'cockpit_installed':False,'preview_only':True,'errors':status.get('errors',[]),'screenshot':'preview.png'}
+        command(['shot',str(root/image_name)])
+        result={'isolated_app_home':str(scratch),'cockpit_installed':False,'preview_only':True,'errors':status.get('errors',[]),'screenshot':image_name}
         (root/'preview-result.json').write_text(json.dumps(result,indent=2)+'\n')
         print(json.dumps(result,indent=2))
     finally:

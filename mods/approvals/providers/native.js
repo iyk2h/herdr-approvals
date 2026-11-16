@@ -47,17 +47,23 @@ export class NativeProvider {
     };
   }
 
-  async list() {
+  async discover(blockedOnly) {
     const listing = decoded(await this.host.hc(['ls', '--json']));
     const candidates = (listing.terminals ?? []).filter(t =>
-      /^t[a-z0-9]+$/.test(t.address) && t.state === 'live' && word(t) === 'blocked' && codex(t));
+      /^t[a-z0-9]+$/.test(t.address) && t.state === 'live' && codex(t)
+      && (!blockedOnly || word(t) === 'blocked'));
     const sessions = [];
-    for (const terminal of candidates.slice(0, 40)) {
+    for (const terminal of blockedOnly ? candidates.slice(0, 40) : candidates) {
       const session = await this.get(terminal.address);
-      if (session?.state === 'live' && session.status === 'blocked') sessions.push(session);
+      if (session?.state === 'live' && session.agent === 'codex'
+        && (!blockedOnly || session.status === 'blocked')) sessions.push(session);
     }
     return sessions;
   }
+
+  catalog() { return this.discover(false); }
+
+  list() { return this.discover(true); }
 
   async readQuestion(session) {
     const before = await this.get(session.address);

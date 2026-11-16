@@ -24,10 +24,12 @@ export default class Approvals extends View {
     this.scope = shared('approvals.scope') === 'selected' ? 'selected' : 'all';
     this.selectedSessions = Array.isArray(shared('approvals.sessions')) ? shared('approvals.sessions').filter(key => typeof key === 'string').slice(0, 40) : [];
     this.choice = null; this.selectedKey = null; this.busy = false; this.closed = false;
+    this.sessionCatalog = [];
     this.makeController();
     if (this.preview) {
       const question = parseCodex(PREVIEW);
-      this.controller.rows = [{ sessionKey: 'preview', episode: '1', address: 'fixture', title: 'Codex · 테스트 실행', agent: 'codex', status: 'blocked', question }];
+      this.controller.rows = [{ sessionKey: 'preview', episode: '1', address: 'fixture', title: 'Codex · Run tests', agent: 'codex', status: 'blocked', question }];
+      this.sessionCatalog = this.controller.rows.map(({ question: _question, ...session }) => session);
       this.controller.enabled = true;
       this.controller.pending = { sessionKey: 'preview', episode: '1', fingerprint: question.fingerprint, choice: 1, deadline: Date.now() + 3000 };
       return;
@@ -38,6 +40,7 @@ export default class Approvals extends View {
     cx.spawn(async cx => { while (!this.closed) { const name = await nextCommand(); this.command(name, cx); } });
   }
   makeController() {
+    this.sessionCatalog = [];
     const native = new NativeProvider(host);
     const delegate = this.connection === 'cockpit' ? new CockpitProvider({ native, view: () => cockpitRequest({ op: 'view' }), answer: (choice, options) => cockpitRequest({ op: 'answer', ...choice }, options) }) : native;
     const provider = new ScopedProvider(delegate, () => ({ scope: shared('approvals.scope') === 'selected' ? 'selected' : 'all', selectedSessions: Array.isArray(shared('approvals.sessions')) ? shared('approvals.sessions') : [] }));
@@ -58,16 +61,29 @@ export default class Approvals extends View {
   refresh(cx) {
     if (this.closed || this.preview || this.refreshing || this.busy) return;
     this.refreshing = true;
+    const controller = this.controller;
     cx.spawn(async cx => {
       try {
         this.syncSettings();
-        await this.controller.refresh(); this.error = null;
+        const catalog = await controller.provider.catalog();
+        if (this.closed || controller !== this.controller) return;
+        if (!Array.isArray(catalog)) throw new Error('Agent catalog is unavailable');
+        this.sessionCatalog = catalog;
+        await controller.refresh();
+        if (this.closed || controller !== this.controller) return;
+        this.error = controller.error;
         const selected = this.controller.rows.find(row => row.sessionKey === this.selectedKey);
         if (!selected) { this.selectedKey = this.controller.rows[0]?.sessionKey ?? null; this.choice = null; this.selection = null; }
         else if (this.selection && (selected.episode !== this.selection.episode || selected.question.fingerprint !== this.selection.fingerprint)) { this.choice = null; this.selection = null; }
         this.schedule(cx);
-      } catch (e) { this.controller.cancel(); this.error = String(e.message || e); }
-      finally { this.refreshing = false; cx.notify(); }
+      } catch (e) {
+        if (this.closed || controller !== this.controller) return;
+        controller.discardObservations(e);
+        this.sessionCatalog = []; this.selectedKey = null; this.choice = null; this.selection = null;
+        this.error = String(e.message || e);
+      } finally {
+        if (!this.closed && controller === this.controller) { this.refreshing = false; cx.notify(); }
+      }
     });
   }
   syncSettings() {
@@ -87,9 +103,13 @@ export default class Approvals extends View {
   setDelay(ms, cx) { if (this.preview || ![3000, 5000, 10000].includes(ms)) return; setShared('approvals.delay', ms); this.syncSettings(); this.refresh(cx); cx.notify(); }
   setScope(scope, cx) { if (this.preview) return; setShared('approvals.scope', scope === 'selected' ? 'selected' : 'all'); this.syncSettings(); this.refresh(cx); cx.notify(); }
   toggleSession(key, cx) {
-    if (this.preview || !this.controller.rows.some(row => row.sessionKey === key)) return;
+    if (this.preview || !this.sessionCatalog.some(session => session.sessionKey === key)) return;
     const selected = new Set(this.selectedSessions); if (selected.has(key)) selected.delete(key); else selected.add(key);
     setShared('approvals.sessions', [...selected].slice(0, 40)); this.syncSettings(); this.refresh(cx); cx.notify();
+  }
+  clearSessions(cx) {
+    if (this.preview) return;
+    setShared('approvals.sessions', []); this.controller.invalidate(); this.syncSettings(); this.refresh(cx); cx.notify();
   }
   setMode(mode, cx) { if (this.preview) return; setShared('approvals.mode', mode === 'remember' ? 'remember' : 'once'); this.syncSettings(); this.refresh(cx); cx.notify(); }
   pick(row, cx) { this.controller.cancel(row.sessionKey); this.selectedKey = row.sessionKey; this.choice = null; this.selection = null; cx.notify(); }

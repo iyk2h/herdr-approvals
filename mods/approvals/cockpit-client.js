@@ -8,9 +8,9 @@ export async function cockpitRequest(message, options = {}) {
   let args;
   if (message.op === 'view') args = ['agents', '--json'];
   else if (message.op === 'answer' && /^app:t[a-z0-9]+$/.test(message.terminal) && Number.isInteger(message.choice) && message.choice > 0 && message.choice < 10) args = ['agents', 'answer', message.terminal, String(message.choice)];
-  else throw new Error('지원하지 않는 Cockpit 요청입니다.');
+  else throw new Error('This Cockpit request is not supported.');
   if (options.allowed && !options.allowed()) return { error: 'Input cancelled before dispatch' };
   const result = await exec(info.bin, args, { timeout: 15000 });
-  if (result.code !== 0) throw new Error('Cockpit 요청을 완료하지 못했습니다.');
+  if (result.code !== 0) throw new Error('The Cockpit request failed.');
   return message.op === 'view' ? JSON.parse(result.stdout) : {};
 }

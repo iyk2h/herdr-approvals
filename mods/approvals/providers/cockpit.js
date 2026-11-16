@@ -8,6 +8,8 @@ export class CockpitProvider {
     this.answer = answer;
   }
 
+  catalog() { return this.native.catalog(); }
+
   async list() {
     const value = await this.view();
     const rows = Array.isArray(value) ? value : value?.agents ?? value?.rows ?? [];

@@ -1,45 +1,43 @@
 # Herdr Approvals
 
-A compact approval panel for local Codex sessions in Herdr. It works without
-Cockpit and fits into an existing layout. Request and settings tabs separate the
-current decision from persistent automation preferences.
+A native permission panel for Herdr. Cockpit is optional.
 
-![Herdr Approvals](preview.png)
+![Requests and settings](preview.png)
 
-## What you see
+The panel fits in a 360px sidebar and uses the active Herdr theme.
+**Requests** shows the command, numbered replies, and an automatic approval countdown.
+**Settings** controls automatic approval, delay, agents, the automatic reply, and the connection.
 
-A roughly 360px right panel using the active Herdr theme. A title and waiting count
-sit above Request/Settings tabs. Requests show a compact countdown with cancel,
-the session, a monospace command, left-aligned numbered choices and a fixed action
-row. Settings use labeled sections with descriptions and segmented choices for
-3/5/10 seconds, all/selected sessions, once/remember and native/Cockpit connection.
+## Reply
 
-## How it behaves
+Select a reply. Then press Enter.
+Press Esc to cancel automatic approval for the current request.
+Selection stops the countdown. Cancellation does not reject the command.
 
-Only recognized local Codex permission menus are input targets. Automatic approval
-starts off. Enabling it gives each eligible request a three-second cancel window.
-Selecting an answer makes that request manual. Numbers choose; Enter submits;
-Esc cancels the current automatic request without sending deny. Shared settings
-update every panel copy. An uncertain delivery is not retried automatically.
+## Automatic approval
 
-## Built from
+Automatic approval is off by default.
+You can include all supported local Codex agents or select agents before a request arrives.
+The **All agents** setting includes new local Codex agents in Herdr.
+A selection applies to the current terminal process. A new process requires a new selection.
 
-One native `View` in `mods/approvals/main.js`, GPUI base controls, a pure parser,
-policy, controller and journal, and injected native/Cockpit providers. Native mode
-uses `hc ls/get/read/keys`. A small shell helper speaks versioned JSON-RPC over
-`hc connect` for compare-and-set claims in the mod's own core document. The optional
-Cockpit transport reads its installation config and invokes its agents CLI.
+The mod supports local Codex permission menus in English.
+**Allow once** permits one command. **Save command rule** saves a narrow rule that Codex offers.
+If no rule is present, the mod permits the command once.
+Ambiguous rules require a manual reply.
 
-## Watch out
+## Connection
 
-This is a macOS/Linux local-Codex first version. Do not treat arbitrary numbered
-text as a permission menu. Preserve the complete command in identity. Do not send
-from render/checking mode. All responses must use the same controller and durable
-claim. Core key delivery can be delayed and cannot be cancelled once dispatched;
-three seconds is not the exact approval time. External senders are not fenced.
+The default connection uses Herdr directly. The optional Cockpit connection uses an existing local installation.
+Both connections share the same input records. The mod does not switch senders after a failed connection.
 
-## Done when
+If Cockpit already approves these agents, disable its automatic sender before you enable this mod.
+The installer preserves that sender and its settings.
 
-Pure tests pass; native check starts no IO; isolated native smoke sends exactly
-one answer to a fictional TUI; a clean preview home works without Cockpit; and
-install/update never overwrite an existing unrelated mod, keys or layout.
+## Limits
+
+The countdown ends at dispatch. Core can delay delivery. After dispatch, cancellation is no longer possible.
+If delivery is uncertain, the mod stops input to that terminal process.
+Remote agents and other permission formats do not accept input through this version.
+
+See [README](README.md) for installation and [validation](docs/validation.md) for test coverage.

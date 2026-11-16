@@ -29,14 +29,14 @@ export const journalHost = {
 export async function cockpitInfo() {
   if (checking()) throw new Error('Cockpit IO is disabled during checking');
   const text = await readTextFile(`${appHome()}/cockpit.json`);
-  if (!text) throw new Error('Cockpit 연결 설정이 없습니다. Herdr 연결을 사용하세요.');
+  if (!text) throw new Error('Cockpit settings are absent. Select the Herdr connection.');
   const install = JSON.parse(text);
-  if (install.machine) throw new Error('첫 버전은 로컬 Cockpit 연결만 지원합니다.');
+  if (install.machine) throw new Error('Remote Cockpit connections are not supported.');
   const hubText = await readTextFile(`${install.cache || `${home()}/.cache/cockpit`}/hub.json`);
-  if (!hubText) throw new Error('실행 중인 Cockpit 허브를 찾지 못했습니다.');
+  if (!hubText) throw new Error('The Cockpit hub is not available. Start Cockpit.');
   const info = JSON.parse(hubText);
-  if (!Number.isInteger(info.port) || info.port < 1 || info.port > 65535 || !info.token) throw new Error('Cockpit 연결 설정을 확인하세요.');
-  if (!['127.0.0.1', 'localhost', '::1'].includes(info.host || '127.0.0.1')) throw new Error('로컬 Cockpit 허브만 연결할 수 있습니다.');
-  if (typeof install.bin !== 'string' || !install.bin) throw new Error('Cockpit 실행 경로가 없습니다.');
+  if (!Number.isInteger(info.port) || info.port < 1 || info.port > 65535 || !info.token) throw new Error('The Cockpit hub settings are invalid.');
+  if (!['127.0.0.1', 'localhost', '::1'].includes(info.host || '127.0.0.1')) throw new Error('Only local Cockpit hubs are supported.');
+  if (typeof install.bin !== 'string' || !install.bin) throw new Error('The Cockpit executable path is absent.');
   return { bin: install.bin };
 }

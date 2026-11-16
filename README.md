@@ -1,98 +1,105 @@
 # Herdr Approvals
 
-A standalone approval panel for Herdr. Cockpit is optional.
+A native permission panel for Herdr. Cockpit is optional.
 
-![Approval panel with a fictional request](preview.png)
+![Requests and settings with a fictional command](preview.png)
 
-The panel shows complete local Codex permission requests, lets you select a reply,
-and optionally starts a configurable countdown before sending it. Selecting an
-answer pauses that request's automatic approval. Esc cancels automatic approval;
-Enter sends your selected answer. Cancellation does not send a rejection.
+You can reply to a Codex permission request or enable automatic approval.
+Automatic approval is off by default.
+
+## Settings
+
+| Setting | Behavior |
+| --- | --- |
+| Auto-approve | Sends the automatic reply after the delay. |
+| Delay | Gives you 3, 5, or 10 seconds to examine the command or cancel. |
+| Agents | Includes all supported local Codex agents, or only selected agents. |
+| Automatic reply | Allows one command, or saves a command rule that Codex offers. |
+| Connection | Uses Herdr directly, or an existing local Cockpit installation. |
+
+**All agents** includes new local Codex agents in Herdr.
+**Selected agents** lets you select those agents before a request arrives.
+Selection applies to the current terminal process. A new process requires a new selection.
+See the [agent picker](agents-preview.png).
+
+**Allow once** permits the current command.
+**Save command rule** saves a narrow rule that Codex offers.
+If no rule is present, the mod selects **Allow once**.
+The mod never selects a rule for all commands or a permission bypass.
+Ambiguous rules require a manual reply.
+
+## Reply
+
+Select a numbered reply. Then press Enter or select **Send reply**.
+Selection stops automatic approval for that request.
+Esc cancels automatic approval without a rejection. **Open agent** shows the terminal.
 
 ## Requirements
 
-- Herdr desktop app with native JavaScript mods and herdr-core 0.1.21 or compatible.
-- macOS or Linux, `hc` and `/bin/sh` available to Herdr.
-- A local Codex session that reports blocked status and displays the supported
-  English single-choice permission menu. Claude, remote, authentication, free-text
-  and multi-select questions are not input targets in this version.
+The mod requires these components:
 
-No Node, Python, Rust build or separate server is required to run the mod.
+- Herdr desktop with native JavaScript mods and herdr-core 0.1.21 or a compatible version
+- macOS or Linux with `hc` and `/bin/sh` available to Herdr
+- A local Codex agent with the supported English permission menu.
+
+Claude, remote agents, authentication prompts, text questions, and checkbox forms do not accept input through this version.
+Node and Python are development tools. The mod requires neither at runtime.
 
 ## Install
 
-Copy `mods/approvals/` into `~/.config/herdr-app/mods/approvals/`, or use the optional
-installer with Python 3:
+Copy `mods/approvals/` to `~/.config/herdr-app/mods/approvals/`.
+Alternatively, install the mod with Python 3:
 
 ```sh
 python3 tools/install.py
 herdr-app check ~/.config/herdr-app/mods/approvals
 ```
 
-The installer refuses an existing folder unless `--update` is given. Updates first
-save the previous mod in `~/.local/share/herdr-approvals/backups/`. It does not edit
-Cockpit, existing key bindings, or enable automatic approval.
+The panel opens on the right. The installer preserves Cockpit, key bindings, and existing settings.
+If the folder exists, add `--update`.
+Updates save the previous mod in `~/.local/share/herdr-approvals/backups/`.
 
-The new mod docks on the right. To place it yourself, set its mod.json `place` to
-`none` before copying and add a layout block with `content: {mod: "approvals"}`.
-Merge any desired bindings from `keys.json` after checking for conflicts.
+For manual placement, set `place` to `none` in `mod.json` before installation.
+Then add a layout block with `content: {mod: "approvals"}`.
+If you use `keys.json`, examine the existing bindings before you copy the entries.
 
-New installations default to automatic approval off and allow once. The policy
-button can enable a recognized narrow remembered scope. Settings offer 3, 5 or 10
-seconds and all local Codex sessions or explicitly selected sessions. Broad all/future/bypass
-options are not automatic targets. Auto settings are shared between panel copies.
+## Cockpit and delivery
 
-## Optional Cockpit connection
+Herdr is the default connection.
+When no request is pending, you can change the connection.
+If a connection fails, the mod does not switch senders.
 
-With no pending requests, the connection button switches between native Herdr and
-an existing local Cockpit installation. The adapter uses its CLI only when selected
-and never installs or updates it. Native mode does not require Cockpit files or
-connect to its hub. Connection failures do not fall back to another sender.
+If Cockpit already approves these agents, disable its automatic sender before you enable this mod.
+The installer preserves that sender.
 
-The mod shares a durable per-request claim between both connections. Other tools
-and Cockpit's own automatic senders do not participate in this protocol. Disable
-an existing custom automatic sender before enabling this one for the same sessions.
-Keep its files and settings backed up. The installer deliberately does not migrate
-or remove an existing Cockpit customization.
+The countdown ends at dispatch. Herdr core can delay delivery.
+After dispatch starts, cancellation is no longer possible. External input can still change the prompt before delivery.
+If delivery is uncertain, the mod stops input to that terminal process.
 
-## Delivery and recovery
+Panel copies in the same Herdr home share settings. Copies on the same core share input records.
+The records contain no command or question text.
+See [design](docs/design.md) for delivery and recovery details.
 
-Three seconds is the cancel window before dispatch, not a promise about execution
-time. Core can delay key delivery until the terminal is quiet. Once dispatch starts,
-the mod cannot withdraw that input or atomically prevent an external user/CLI from
-changing the prompt. It re-reads the request before delivery but cannot guarantee
-zero stale input with the current core API.
+## Development
 
-An uncertain delivery quarantines that terminal process rather than retrying it.
-Open the terminal and confirm its state. A restarted root process has a new
-identity. Confirmed attempts and cancellations remain in a versioned core document;
-question/command bodies are not saved there. Cancellation is immediate in memory;
-`controller.flush()` acknowledges its durable write. A hard crash before that
-acknowledgement can lose the cancellation.
-
-## Development and verification
-
-Node 24 is used only by development tests. There are no npm dependencies.
+The tests require Node 24 and no npm dependencies. The native tools require Python 3.
 
 ```sh
 npm test
 npm run check:package
-herdr-app check ./mods/approvals
+python3 tools/native-check.py
 python3 tools/core-spike.py
 python3 tools/preview.py
 ```
 
-`core-spike.py` creates its own HC_SESSION and scratch XDG directories, runs a
-fictional TUI, verifies native screen parsing and actual key delivery, then stops
-only that core. It never sends input to an existing user terminal.
-`preview.py` uses a separate Herdr home and a fictional request for the screenshot.
-The native check mode starts no IO, helper processes or persistent writes.
+During the native check, the mod sends no input and starts no helper process. It makes no persistent changes.
+The core test and preview use separate environments.
+See [validation](docs/validation.md) for coverage and limits.
 
 ## Gallery and license
 
-The repository follows the Herdr mod gallery format: `mods/approvals/`, `RECIPE.md`,
-`preview.png` and optional `keys.json`. A public repository with the `herdr-mod`
-topic can be indexed by the gallery. Publishing is separate from local testing.
+Gallery indexing requires a public repository with the `herdr-mod` topic. Publication is a separate step.
 
-Apache-2.0, with Cockpit MIT and herdr-relevo attribution preserved in `NOTICE` and
-`LICENSES/`. See `docs/design.md` for the module boundaries and delivery limitations.
+Apache-2.0 permits use, modification, and distribution under its terms.
+The parser retains attribution to Cockpit and herdr-relevo.
+See [LICENSE](LICENSE), [NOTICE](NOTICE), and [LICENSES](LICENSES/).

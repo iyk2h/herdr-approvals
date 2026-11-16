@@ -421,3 +421,44 @@ test('removing a session from auto approval during either fresh validation read 
     assert.equal(h.provider.sent.length, 0, `auto eligibility changed during validation read ${pausedRead}`);
   }
 });
+
+for (const failedOperation of ['list', 'readQuestion']) {
+  test(`a ${failedOperation} refresh failure discards stale observations while retaining durable fences and permitting fresh recovery`, async () => {
+    for (const withSelection of [false, true]) {
+      const h = await ready();
+      assert.ok(h.controller.pending);
+      await h.journal.claim('retained-unknown-attempt', {
+        status: 'unknown', provider: 'native', sessionKey: 'another-incarnation', episode: 'old-episode',
+      });
+      if (withSelection) {
+        h.controller.select(h.provider.current[0].sessionKey, 1);
+        await h.controller.flush();
+        assert.ok(h.controller.selected);
+        assert.ok(h.controller.selectionSnapshot);
+      }
+      const fences = await h.journal.entries();
+      const original = h.provider[failedOperation].bind(h.provider);
+      h.provider[failedOperation] = async () => { throw new Error(`${failedOperation} unavailable`); };
+      await h.controller.refresh();
+
+      assert.deepEqual(h.controller.rows, [], 'stale rows cannot survive a failed observation');
+      assert.equal(h.controller.pending, null);
+      assert.equal(h.controller.selected, null);
+      assert.equal(h.controller.selectionSnapshot, null);
+      assert.equal(h.controller.status, 'error');
+      assert.match(String(h.controller.error), /unavailable/);
+      assert.deepEqual(await h.journal.entries(), fences, 'an observation error cannot erase durable input fences');
+      assert.equal(h.provider.sent.length, 0);
+
+      h.provider[failedOperation] = original;
+      h.provider.current[0].episode = 'turn-2:blocked-60';
+      h.provider.current[0].question = parseCodex(codexPrompt({command: 'pnpm lint'}));
+      h.advance(1000);
+      await h.controller.refresh();
+      assert.equal(h.controller.rows.length, 1);
+      assert.equal(h.controller.rows[0].episode, 'turn-2:blocked-60');
+      assert.equal(h.controller.pending.deadline, 4000);
+      assert.ok((await h.journal.entries()).some(entry => entry.key === 'retained-unknown-attempt' && entry.status === 'unknown'));
+    }
+  });
+}

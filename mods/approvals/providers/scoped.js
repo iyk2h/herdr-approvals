@@ -9,6 +9,7 @@ export class ScopedProvider {
     const settings = this.settings();
     return settings.scope !== 'selected' || settings.selectedSessions.includes(session.sessionKey);
   }
+  catalog() { return this.delegate.catalog(); }
   list() { return this.delegate.list(); }
   async readQuestion(session) {
     const row = await this.delegate.readQuestion(session);
