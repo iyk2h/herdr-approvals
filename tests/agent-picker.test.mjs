@@ -15,7 +15,7 @@ globalThis.__pickerInput = (options = {}) => {
   return {value: () => value, set_value: next => { value = next; }, on: () => true, focus() {}, release: () => true};
 };
 globalThis.__pickerHost = {
-  checking: () => checking, shared: key => settings.get(key), setShared: (key, value) => settings.set(key, value),
+  checking: () => checking, shared: key => settings.get(key), setShared: (key, value) => settings.set(key, value), settings: () => ({zoom: 1}),
   openOverlay: () => { io += 1; throw new Error('Unexpected popup'); }, closeOverlay: () => { io += 1; },
   props: () => ({}), agents: () => [], appHome: () => '/fixture', home: () => '/fixture',
   nextCommand: () => new Promise(() => {}), run: () => { io += 1; },

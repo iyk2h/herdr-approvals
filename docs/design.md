@@ -24,7 +24,7 @@ Each request has an independent deadline. Due requests share one serial dispatch
 Cancelling one session invalidates only that session's automatic request.
 Global cancellation and policy changes invalidate all affected deadlines and in-flight validation.
 Delay values use whole seconds from 1 to 3,600. Invalid values do not change saved settings.
-It saves a durable claim before input. The claim uses compare-and-set writes in a core document.
+The controller saves a durable claim before input. The claim uses compare-and-set writes in a core document.
 A cancellation record stops automatic input. An explicit manual reply remains possible before dispatch.
 
 The journal contains at most 512 records.

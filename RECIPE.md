@@ -4,17 +4,19 @@ A native permission panel for Herdr. Cockpit is optional.
 
 ![Requests and settings](preview.png)
 
-The panel fits in a 360px sidebar and uses the active Herdr theme.
+By default, the mod opens in a 360px right panel. It uses the active Herdr theme.
 **Requests** shows the command, numbered replies, and an automatic approval countdown.
 **Settings** controls automatic approval, delay, agents, the automatic reply, and the connection.
 
-A 40px strip fits above a usage panel. Its height stays fixed.
-Settings and request details open in popups. The strip remains the only input controller.
+You can add a 40px strip through a personal layout. Its height stays fixed.
+Settings and request details open in popups, at up to 480×720px.
+Smaller windows limit the initial popup size. Long content scrolls inside the popup.
 
 ## Reply
 
 Select a reply. Then press Enter.
-Press Esc to cancel automatic approval for the current request.
+In a popup, Esc closes the window.
+In the full panel, Esc stops all current automatic requests.
 Selection stops that request's countdown. Other agents continue counting down.
 Cancellation does not reject the command. The global cancel command stops all current countdowns.
 
@@ -26,9 +28,10 @@ The **All agents** setting includes new local Codex agents in Herdr.
 A selection applies to the current terminal process. A new process requires a new selection.
 
 The mod supports local Codex permission menus in English.
-**Allow once** permits one command. **Save command rule** saves a narrow rule that Codex offers.
-If no rule is present, the mod permits the command once.
-Ambiguous rules require a manual reply.
+**Allow once** permits one command. **Save command rule** selects a command rule that Codex offers.
+If no supported rule exists, automatic approval selects **Allow once**.
+Automatic approval excludes recognized all-command and bypass options.
+In **Save command rule** mode, multiple rule choices require a manual reply.
 
 ## Connection
 
@@ -37,6 +40,16 @@ Both connections share the same input records. The mod does not switch senders a
 
 If Cockpit already approves these agents, disable its automatic sender before you enable this mod.
 The installer preserves that sender and its settings.
+
+## Built from
+
+Native GPUI JavaScript builds the controls.
+`mods/approvals/main.js` owns the controller. `ui.js` builds the strip, panel, and popup.
+The parser reads the supported Codex menu. The providers identify local terminal processes and read each request again before input.
+
+The mod starts `hc` and `/bin/sh`. The optional connection starts the existing local Cockpit executable.
+The core document saves input and cancellation records. These records contain request digests.
+Node and Python support development and installation. The mod requires neither at runtime.
 
 ## Limits
 

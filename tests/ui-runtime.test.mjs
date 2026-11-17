@@ -15,7 +15,7 @@ globalThis.__approvalInput=(options={})=>{
     emit:(name,cx)=>events.get(name)?.({},cx),focus(){},release(){return true;}};
 };
 globalThis.__approvalHost={
-  checking:()=>check,shared:key=>state.get(key),setShared:(key,value)=>state.set(key,value),
+  checking:()=>check,shared:key=>state.get(key),setShared:(key,value)=>state.set(key,value),settings:()=>({zoom:1}),
   agents:()=>[],props:()=>({}),theme:()=>({background:'#101010',foreground:'#ffffff',muted:'#aaaaaa',raised:'#202020',surface:'#202020',hover:'#303030'}),
   openOverlay:spec=>{io++;overlays.push(spec);return `popup-${overlays.length}`;},closeOverlay:id=>{io++;closedOverlays.push(id);},
   appHome:()=>'/fixture',home:()=>'/fixture',nextCommand:()=>new Promise(()=>{}),run:(name,args)=>{io++;commands.push({name,args});},

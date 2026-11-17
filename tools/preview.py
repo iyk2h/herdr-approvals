@@ -28,14 +28,24 @@ if options.selected:
     mod = scratch/'mods/approvals'
     (mod/'main.js').rename(mod/'view.js')
     (mod/'main.js').write_text("import Base from './view.js';export default class Preview extends Base{init(p,cx){super.init(p,cx);if(this.tab==='settings'){this.scope='selected';this.selectedSessions=['preview'];this.sessionCatalog.push({...this.sessionCatalog[0],sessionKey:'preview-working',address:'fixture-working',title:'Codex · Build app',status:'working'});}}}")
+else:
+    mod = scratch/'mods/approvals-gallery-settings'
+    shutil.copytree(root/'mods/approvals', mod)
+    (mod/'main.js').rename(mod/'view.js')
+    (mod/'mod.json').write_text(json.dumps({'place':'none','title':'Approval settings preview'}))
+    (mod/'main.js').write_text("import Base from './view.js';import {panel} from './ui.js';export default class Preview extends Base{render(cx){return panel({...this,controller:this.controller,presentation:true,compact:false,key:()=>false,dismiss:()=>{}},cx);}}")
 (scratch/'layouts').mkdir()
-(scratch/'layouts/approvals-preview.json').write_text(json.dumps({'id':'root','type':'row','divider':{'width':1,'color':'border'},'children':[{'id':'approval-requests','type':'block','size':{'weight':1},'content':{'mod':'approvals','props':{'preview':True,'tab':'requests'}}},{'id':'approval-settings','type':'block','size':{'weight':1},'content':{'mod':'approvals','props':{'preview':True,'tab':'settings'}}}]}))
+requests = {'id':'approval-requests','type':'block','size':{'weight':1},'content':{'mod':'approvals','props':{'preview':True,'tab':'requests'}}}
+settings = {'id':'approval-settings','type':'block','size':{'weight':1},'content':{'mod':'approvals' if options.selected else 'approvals-gallery-settings','props':{'preview':True,'tab':'settings'}}}
+if not options.selected:
+    requests = {'id':'approval-examples','type':'column','size':{'weight':1},'children':[requests,{'id':'approval-strip','type':'block','size':{'px':40},'content':{'mod':'approvals','props':{'preview':True,'compact':True}}}]}
+(scratch/'layouts/approvals-preview.json').write_text(json.dumps({'id':'root','type':'row','divider':{'width':1,'color':'border'},'children':[requests,settings]}))
 (scratch/'shared.json').write_text(json.dumps({'layout':'approvals-preview','frame.welcomed':'skipped'}))
 (scratch/'settings.json').write_text(json.dumps({'zoom':1.0,'font_size':14,'ui_font_size':13}))
 (scratch/'keys.json').write_text(json.dumps({'global':{}}))
 version = subprocess.run([app,'--version'],capture_output=True,text=True,check=True).stdout.strip().split()[-1]
 (scratch/'update-notes.json').write_text(json.dumps({'last_run':version,'presented':[]}))
-(scratch/'window.json').write_text(json.dumps({'state':'windowed','bounds':[80,80,760,980]}))
+(scratch/'window.json').write_text(json.dumps({'state':'windowed','bounds':[80,80,760,980] if options.selected else [80,80,960,740]}))
 
 def command(args, timeout=10):
     result=subprocess.run([app,*args],env=env,capture_output=True,text=True,timeout=timeout)

@@ -1,6 +1,6 @@
 import { View } from 'gpui-kit';
 import { InputState } from 'gpui-base';
-import { checking, shared, setShared, nextCommand, run, props, agents, openOverlay, closeOverlay } from 'herdr';
+import { checking, shared, setShared, nextCommand, run, props, agents, openOverlay, closeOverlay, settings } from 'herdr';
 import { ApprovalController } from './controller.js';
 import { MemoryJournal, CasJournal } from './state.js';
 import { parseCodex } from './parsers/codex.js';
@@ -106,7 +106,12 @@ export default class Approvals extends View {
     const dialog = newPresentation(this.ownerId, tab === 'settings' ? 'settings' : 'requests');
     this.dialogToken = dialog.token;
     if (this.popupId) closeOverlay(this.popupId);
-    this.popupId = openOverlay({ mod: 'approvals', kind: 'dialog', width: 480, height: 600,
+    const viewport = globalThis.window?.viewport_size?.();
+    const scale = settings().zoom;
+    const zoom = typeof scale === 'number' && Number.isFinite(scale) && scale > 0 ? scale : 1;
+    const fit = (preferred, available) => Number.isFinite(available) && available > 0
+      ? Math.min(preferred, Math.max(1, available / zoom - 32)) : preferred;
+    this.popupId = openOverlay({ mod: 'approvals', kind: 'dialog', width: fit(480, viewport?.width), height: fit(720, viewport?.height),
       props: { presentation: true, ownerId: this.ownerId, dialogToken: dialog.token, tab: dialog.tab } });
   }
   relay(action) {

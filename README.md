@@ -12,7 +12,7 @@ Automatic approval is off by default.
 | Setting | Behavior |
 | --- | --- |
 | Auto-approve | Sends the automatic reply after the delay. |
-| Delay | Use 3, 5, or 10 seconds, or enter a whole number from 1 to 3,600 seconds and select Apply. |
+| Delay | Select 3, 5, or 10 seconds. For a custom delay, enter 1–3,600 whole seconds. Then select Apply. |
 | Agents | Includes all supported local Codex agents, or only selected agents. |
 | Automatic reply | Allows one command, or saves a command rule that Codex offers. |
 | Connection | Uses Herdr directly, or an existing local Cockpit installation. |
@@ -23,16 +23,18 @@ Selection applies to the current terminal process. A new process requires a new 
 See the [agent picker](agents-preview.png).
 
 **Allow once** permits the current command.
-**Save command rule** saves a narrow rule that Codex offers.
-If no rule is present, the mod selects **Allow once**.
-The mod never selects a rule for all commands or a permission bypass.
-Ambiguous rules require a manual reply.
+**Save command rule** selects a command rule that Codex offers.
+If no supported rule exists, automatic approval selects **Allow once**.
+Automatic approval excludes recognized all-command and bypass options.
+In **Save command rule** mode, multiple rule choices require a manual reply.
 
 ## Reply
 
 Select a numbered reply. Then press Enter or select **Send reply**.
 Selection stops automatic approval for that request.
-Esc cancels automatic approval without a rejection. **Open agent** shows the terminal.
+In a popup, Esc closes the window.
+In the full panel, Esc stops all current automatic requests. Cancellation sends no rejection.
+**Open agent** shows the terminal.
 Other mods can open a tab with `approvals.settings` or `approvals.requests`. These commands send no reply.
 
 ## Requirements
@@ -45,6 +47,7 @@ The mod requires these components:
 
 Claude, remote agents, authentication prompts, text questions, and checkbox forms do not accept input through this version.
 Node and Python are development tools. The mod requires neither at runtime.
+Validation used macOS. Linux is not yet validated.
 
 ## Install
 
@@ -71,11 +74,13 @@ For a compact widget, add this block to a personal layout:
 ```
 
 The strip stays 40px high in all states. **Settings** opens a popup.
-Select the request count to read the command and replies. Review pauses automatic approval for that request.
+Select the request count to read the command and replies.
+This action stops automatic approval for that request. Closing details does not restart that request.
 Closing settings preserves the automatic timer.
+Popups open at up to 480×720px. Smaller windows limit their initial size. Long content scrolls inside the popup.
 
 Each agent has its own countdown. Requests found together count down together.
-Replies use one dispatch path when due; they do not each wait another full delay.
+When countdowns end, the mod sends replies one at a time. Each request uses its original deadline.
 Review or cancellation for one request leaves the other countdowns running.
 The global cancel command stops all current automatic requests.
 Changing the delay starts fresh countdowns with the new duration.

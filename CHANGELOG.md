@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Increase popup height and fit new popups to the available window size.
+- Clarify cancellation, command rules, and the limits of platform validation.
 - Set a custom delay from 1 to 3,600 seconds and count down requests independently.
 - Keep the compact strip at 40px and show settings and request details in popups.
 - Prevent hidden selections from accepting approval commands in settings.
@@ -16,5 +18,5 @@
 
 - Standalone local Codex approval panel with optional Cockpit connection.
 - Manual answers, three-second automatic countdown, cancellation and scope choice.
-- Durable competing-input claims, persistent cancellations and uncertain-delivery fencing.
-- Pure regression tests, side-effect-free native check and isolated core smoke.
+- Saved input records prevent competing replies and stop further mod input after uncertain delivery.
+- Regression tests, native UI checks, and isolated core tests.
