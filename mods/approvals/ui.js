@@ -143,8 +143,7 @@ function requests(view, row) {
       .when(compactEmpty, el => el.flex_none())
       .when(!compactEmpty, el => el.flex_1().justify_center())
       .child(div().text_size(15).font_medium().child('No pending requests'))
-      .child(description('Codex permission requests appear here.'))
-      .child(button('approvals-empty-settings', 'Open settings', cx => view.setTab('settings', cx), { compact: true })));
+      .child(description('Codex permission requests appear here.')));
   }
   body.child(v_flex().min_w(0).gap(5)
     .child(div().text_size(15).font_semibold().whitespace_normal().child(row.title || row.address))

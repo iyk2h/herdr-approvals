@@ -221,7 +221,7 @@ test('empty native requests use a compact natural height and keep their message 
   popup.close();owner.close();
 });
 
-test('one native presentation follows empty pending and settings content without replacing its owner',async()=>{
+test('one native requests presentation follows arriving and resolved requests without replacing its owner',async()=>{
   const {owner,controller,cx,row}=await ownerModel();
   const pending=controller.pending,countdowns=controller.countdowns;
   controller.rows=[];controller.pending=null;controller.countdowns=new Map();controller.status='idle';
@@ -237,19 +237,14 @@ test('one native presentation follows empty pending and settings content without
   controller.rows=[];controller.pending=null;controller.countdowns=new Map();controller.status='idle';
   owner.changed(cx);await Promise.resolve();
   const empty=popupLayout(popup,popupCx);
-  const settingsPath=empty.pathToText('Open settings');assert.ok(settingsPath);
-  const settingsButton=settingsPath.findLast(node=>node.calls.some(call=>call.method==='on_click'));
-  assert.ok(settingsButton,'the empty state must expose an actual settings control');
-  settingsButton.calls.find(call=>call.method==='on_click').args[0]({},popupCx);
-  await Promise.resolve();await Promise.resolve();
-  assert.equal(popup.tab,'settings');
-  const settings=popupLayout(popup,popupCx);
-  assert.ok(settings.pathToText('Approval settings'));
+  assertCompactEmpty(empty);
+  assert.equal(empty.pathToText('Open settings'),null,'settings are opened from the compact sidebar');
+  assert.equal(popup.tab,'requests');
   assert.equal(popup.controller,controller);
   assert.equal(popup.dialogToken,token,'content changes must retain the existing presentation capability');
   assert.equal(popup.focus,focus,'content changes must preserve the popup focus handle');
   assert.equal(popup.delayInput,input,'content changes must preserve the retained input state');
-  assert.equal(overlays.length,1,'request updates and Open settings must not open another overlay');
+  assert.equal(overlays.length,1,'request updates must not open another overlay');
   assert.deepEqual(closedOverlays,[],'content fitting must not dismiss and reopen the popup');
   assert.equal(popupCx.scheduled.length,0,'the presentation cannot acquire automatic approval timers');
   assert.equal(cx.scheduled.length,0,'presentation geometry cannot reschedule the input owner');
