@@ -15,6 +15,6 @@ deploy.py
 verify_live.py
 live-result.json
 fixture.py
-popup-close-input.json
+popup-close-input*.json
 settings-popup.png
 thin-strip.png

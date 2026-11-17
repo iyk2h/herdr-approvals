@@ -183,8 +183,8 @@ function compactPanel(view) {
     .child(autoToggle('approvals-compact-auto', view))
     .child(button('approvals-compact-requests', status, cx => row ? view.review(row, cx) : view.setTab('requests', cx),
       { compact: true, align: 'center', disabled: view.preview || view.busy || controller.busy }).w(78).flex_none().py(3))
-    .child(button('approvals-compact-settings', 'Settings', cx => view.setTab('settings', cx),
-      { compact: true, align: 'center', disabled: view.preview }).w(64).flex_none().py(3));
+    .child(button('approvals-compact-settings', div().whitespace_nowrap().child('Settings'), cx => view.setTab('settings', cx),
+      { compact: true, align: 'center', disabled: view.preview }).w(64).flex_none().px(4).py(3));
 }
 
 function requestPanel(root, view, row) {
