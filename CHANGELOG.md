@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Fit empty request popups to their content and resize the same popup when requests change.
 - Lock current request controls immediately after uncertain delivery.
 - Ignore manual reply shortcuts and old callbacks for locked requests.
 - Publish backup directories only after the backup copy completes.
@@ -10,7 +11,7 @@
 - Synchronize saved delay values without replacing unsaved text or applying stale values.
 - Bind reply notices to the matching agent and request.
 - Add isolated installer checks to CI and require Node 24 for development.
-- Increase popup height and fit new popups to the available window size.
+- Keep settings tall and limit popup dimensions to the available window size.
 - Clarify cancellation, command rules, and the limits of platform validation.
 - Set a custom delay from 1 to 3,600 seconds and count down requests independently.
 - Keep the compact strip at 40px and show settings and request details in popups.

@@ -10,10 +10,11 @@ import { sha256 } from '../mods/approvals/digest.js';
 const state=new Map();const commands=[];const overlays=[];const closedOverlays=[];let io=0;let check=true;
 globalThis.__approvalElement=()=>new Proxy({}, {get:(_target,key)=>key==='then'?undefined:(...args)=>globalThis.__approvalElement()});
 globalThis.__approvalReleasedAccesses=0;
+globalThis.__approvalInputWrites=0;
 globalThis.__approvalInput=(options={})=>{
   let value=options.value??'',released=false;const events=new Map();
   const usable=()=>{if(released){globalThis.__approvalReleasedAccesses++;throw new Error('Input state is released');}};
-  return {value:()=>{usable();return value;},set_value:next=>{usable();value=next;},on:(name,callback)=>{events.set(name,callback);return true;},
+  return {value:()=>{usable();return value;},set_value:next=>{usable();globalThis.__approvalInputWrites++;value=next;},on:(name,callback)=>{events.set(name,callback);return true;},
     emit:(name,cx)=>events.get(name)?.({},cx),focus(){},release(){released=true;return true;}};
 };
 globalThis.__approvalHost={
@@ -159,6 +160,113 @@ function presentation(owner,cx,tab='settings') {
 }
 
 const snapshot=row=>({sessionKey:row.sessionKey,episode:row.episode,digest:sha256(row.question.fingerprint)});
+
+function popupLayout(popup,cx) {
+  const previous=globalThis.__approvalElement,nodes=new Map(),beforeIO=io,beforeInputWrites=globalThis.__approvalInputWrites;
+  globalThis.__approvalElement=()=>{
+    const node={calls:[],children:[]};
+    const element=new Proxy({}, {get:(_target,key)=>key==='then'?undefined:(...args)=>{
+      node.calls.push({method:key,args});
+      if(key==='child')node.children.push(args[0]);
+      if(key==='children')node.children.push(...args[0]);
+      if(key==='when'&&args[0])args[1](element);
+      return element;
+    }});
+    nodes.set(element,node);return element;
+  };
+  try{popup.render(cx);}finally{globalThis.__approvalElement=previous;}
+  assert.equal(io,beforeIO,'measuring or rendering a popup cannot start host IO');
+  assert.equal(globalThis.__approvalInputWrites,beforeInputWrites,'rendering cannot reset an input draft');
+  const root=[...nodes.values()].find(node=>node.calls.some(call=>call.method==='id'&&call.args[0]==='approvals-popup'));
+  assert.ok(root,'the native presentation must render its popup root');
+  const pathToText=(node,text,path=[])=>{
+    const next=[...path,node];
+    if(node.children.includes(text))return next;
+    for(const element of node.children){const child=nodes.get(element);if(child){const found=pathToText(child,text,next);if(found)return found;}}
+    return null;
+  };
+  return {root,pathToText:text=>pathToText(root,text)};
+}
+
+function preferredHeight(root) {
+  return root.calls.findLast(call=>call.method==='h')?.args[0];
+}
+
+function assertCompactEmpty(layout) {
+  const path=layout.pathToText('No pending requests');assert.ok(path,'the empty request message must be visible');
+  assert.ok(preferredHeight(layout.root)===undefined||preferredHeight(layout.root)<=280,'empty requests cannot reserve the settings dialog height');
+  for(const node of path){
+    assert.ok(!node.calls.some(call=>['size_full','h_full','flex_1','justify_center'].includes(call.method)),
+      'the empty message must remain near the header without a vertically stretched ancestor');
+  }
+}
+
+test('native dialogs fit their content so requests and settings can resize without reopening',async()=>{
+  const {owner,cx}=await ownerModel();
+  for(const tab of ['requests','settings']){
+    const {popup,spec}=presentation(owner,cx,tab);
+    assert.equal(Object.hasOwn(spec,'height'),false,'Herdr fits native dialogs only when overlay height is omitted');
+    assert.equal(spec.kind,'dialog');
+    assert.equal(spec.width,480);
+    popup.close();
+  }
+  owner.close();
+});
+
+test('empty native requests use a compact natural height and keep their message near the header',async()=>{
+  const {owner,controller,cx}=await ownerModel();
+  controller.rows=[];controller.pending=null;
+  const {popup,popupCx}=presentation(owner,cx,'requests');
+  assertCompactEmpty(popupLayout(popup,popupCx));
+  popup.close();owner.close();
+});
+
+test('one native presentation follows empty pending and settings content without replacing its owner',async()=>{
+  const {owner,controller,cx,row}=await ownerModel();
+  const pending=controller.pending,countdowns=controller.countdowns;
+  controller.rows=[];controller.pending=null;controller.countdowns=new Map();controller.status='idle';
+  const {popup,popupCx}=presentation(owner,cx,'requests');
+  const token=popup.dialogToken,focus=popup.focus,input=popup.delayInput;
+  popupLayout(popup,popupCx);
+  controller.rows=[row];controller.pending=pending;controller.countdowns=countdowns;controller.status='countdown';
+  owner.changed(cx);await Promise.resolve();
+  const withRequest=popupLayout(popup,popupCx);
+  assert.ok(withRequest.pathToText(row.question.command),'the same presentation must show an arriving request');
+  assert.equal(controller.pending,pending,'request layout must preserve the exact running countdown');
+  assert.equal(controller.countdowns,countdowns);
+  controller.rows=[];controller.pending=null;controller.countdowns=new Map();controller.status='idle';
+  owner.changed(cx);await Promise.resolve();
+  const empty=popupLayout(popup,popupCx);
+  const settingsPath=empty.pathToText('Open settings');assert.ok(settingsPath);
+  const settingsButton=settingsPath.findLast(node=>node.calls.some(call=>call.method==='on_click'));
+  assert.ok(settingsButton,'the empty state must expose an actual settings control');
+  settingsButton.calls.find(call=>call.method==='on_click').args[0]({},popupCx);
+  await Promise.resolve();await Promise.resolve();
+  assert.equal(popup.tab,'settings');
+  const settings=popupLayout(popup,popupCx);
+  assert.ok(settings.pathToText('Approval settings'));
+  assert.equal(popup.controller,controller);
+  assert.equal(popup.dialogToken,token,'content changes must retain the existing presentation capability');
+  assert.equal(popup.focus,focus,'content changes must preserve the popup focus handle');
+  assert.equal(popup.delayInput,input,'content changes must preserve the retained input state');
+  assert.equal(overlays.length,1,'request updates and Open settings must not open another overlay');
+  assert.deepEqual(closedOverlays,[],'content fitting must not dismiss and reopen the popup');
+  assert.equal(popupCx.scheduled.length,0,'the presentation cannot acquire automatic approval timers');
+  assert.equal(cx.scheduled.length,0,'presentation geometry cannot reschedule the input owner');
+  await controller.flush();assert.deepEqual(await controller.journal.entries(),[],'presentation changes cannot send or cancel a reply');
+  popup.close();owner.close();
+});
+
+test('native settings and pending request content retain a useful bounded reading height',async()=>{
+  const {owner,cx}=await ownerModel();
+  for(const [tab,min,max] of [['settings',600,720],['requests',400,640]]){
+    const {popup,popupCx}=presentation(owner,cx,tab);
+    const height=preferredHeight(popupLayout(popup,popupCx).root);
+    assert.ok(Number.isFinite(height)&&height>=min&&height<=max,`${tab} needs its own preferred reading height`);
+    popup.close();
+  }
+  owner.close();
+});
 
 test('compact height stays 40px for idle countdown sending and error without inline expansion',async()=>{
   const {owner,controller,cx}=await ownerModel();

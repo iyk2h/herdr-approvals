@@ -9,8 +9,9 @@ By default, the mod opens in a 360px right panel. It uses the active Herdr theme
 **Settings** controls automatic approval, delay, agents, the automatic reply, and the connection.
 
 You can add a 40px strip through a personal layout. Its height stays fixed.
-Settings and request details open in popups, at up to 480×720px.
-Smaller windows limit the initial popup size. Long content scrolls inside the popup.
+Settings and request details open in popups, at up to 480px wide.
+An empty request popup fits its content. Requests use up to 620px in height. Settings use up to 720px.
+Smaller windows limit the height. Long content scrolls inside the popup.
 
 ## Reply
 

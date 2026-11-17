@@ -1,6 +1,6 @@
 import { div } from 'gpui-kit';
 import { Button, Input, v_flex, h_flex } from 'gpui-base';
-import { theme } from 'herdr';
+import { settings as herdrSettings, theme } from 'herdr';
 
 export function button(id, label, onClick, {
   selected = false, disabled = false, variant = 'ghost', compact = false, grow = false, align = 'left',
@@ -128,7 +128,10 @@ function countdown(view) {
 
 function requests(view, row) {
   const t = theme(), controller = view.controller, rows = controller.rows ?? [];
-  const body = v_flex().id('approvals-requests').flex_1().min_h(0).min_w(0).gap(16).overflow_y_scrollbar();
+  const compactEmpty = view.presentation && !row;
+  const body = v_flex().id('approvals-requests').min_h(0).min_w(0).gap(16)
+    .when(compactEmpty, el => el.flex_none())
+    .when(!compactEmpty, el => el.flex_1().overflow_y_scrollbar());
   if (rows.length > 1) {
     const queue = v_flex().min_w(0).gap(3).child(description('Agents with requests'));
     for (const item of rows) queue.child(button(`approvals-row-${item.address}`, item.title || item.address,
@@ -136,7 +139,9 @@ function requests(view, row) {
     body.child(queue).child(separator());
   }
   if (!row) {
-    return body.child(v_flex().flex_1().min_h(0).justify_center().gap(8).py(24)
+    return body.child(v_flex().min_h(0).gap(8).py(24)
+      .when(compactEmpty, el => el.flex_none())
+      .when(!compactEmpty, el => el.flex_1().justify_center())
       .child(div().text_size(15).font_medium().child('No pending requests'))
       .child(description('Codex permission requests appear here.'))
       .child(button('approvals-empty-settings', 'Open settings', cx => view.setTab('settings', cx), { compact: true })));
@@ -217,9 +222,19 @@ function requestPanel(root, view, row) {
 
 function popupPanel(view) {
   const t = theme();
-  const root = v_flex().id('approvals-popup').size_full().min_h(0).min_w(0).p(18).gap(14)
+  const rows = view.controller?.rows ?? [];
+  const row = rows.find(item => item.sessionKey === view.selectedKey) ?? rows[0];
+  const preferredHeight = view.unavailable ? null : view.tab === 'settings' ? 720 : row ? 620 : null;
+  const root = v_flex().id('approvals-popup').w_full().min_h(0).min_w(0).p(18).gap(14)
     .bg(t.background).text_color(t.foreground).text_size(13)
     .track_focus(view.focus).on_key_down((event, cx) => { if (view.key(event, cx)) cx.stop_propagation(); });
+  if (preferredHeight) {
+    const viewportHeight = globalThis.window?.viewport_size?.()?.height;
+    const scale = herdrSettings().zoom;
+    const zoom = typeof scale === 'number' && Number.isFinite(scale) && scale > 0 ? scale : 1;
+    root.h(preferredHeight);
+    if (Number.isFinite(viewportHeight) && viewportHeight > 0) root.max_h(Math.max(1, viewportHeight / zoom * 0.85));
+  }
   root.child(h_flex().min_w(0).items_center().gap(8)
     .child(div().flex_1().min_w(0).font_semibold().text_size(17).child(view.tab === 'settings' ? 'Approval settings' : 'Approval requests'))
     .child(button('approvals-popup-close', 'Close', () => view.dismiss(), { compact: true, align: 'center' })));
@@ -227,8 +242,6 @@ function popupPanel(view) {
   if (view.unavailable) return root.child(description('This panel is no longer available. Open Approvals again.'));
   if (view.preview) root.child(description('Preview · No input'));
   if (view.tab === 'settings') return root.child(settings(view));
-  const rows = view.controller.rows ?? [];
-  const row = rows.find(item => item.sessionKey === view.selectedKey) ?? rows[0];
   return requestPanel(root, view, row);
 }
 

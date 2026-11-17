@@ -79,7 +79,9 @@ The strip stays 40px high in all states. **Settings** opens a popup.
 Select the request count to read the command and replies.
 This action stops automatic approval for that request. Closing details does not restart that request.
 Closing settings preserves the automatic timer.
-Popups open at up to 480×720px. Smaller windows limit their initial size. Long content scrolls inside the popup.
+Popups are up to 480px wide. An empty request popup fits its content.
+Requests use up to 620px in height. Settings use up to 720px.
+Smaller windows limit the height. Long content scrolls inside the popup.
 
 Each agent has its own countdown. Requests found together count down together.
 When countdowns end, the mod sends replies one at a time. Each request uses its original deadline.

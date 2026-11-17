@@ -15,6 +15,8 @@ The automated checks cover these behaviors:
 - Request notices use the matching agent, episode, and command identity.
 - Uncertain delivery immediately locks the matching request, including manual shortcuts and old callbacks.
 - Popup lifecycle tests open and close settings 30 times without replacing the controller or writing input records.
+- Popup sizing tests preserve the controller, popup token, focus, and delay input through empty requests, pending requests, and settings.
+- An isolated native geometry trial checks those states in large and small windows, including 150% zoom. The same popup resizes without input or journal records.
 - Native checks render ten full and compact states, including custom delays, without input or persistent changes.
 - An isolated core reads two fictional TUIs. Both receive one reply through the native provider after the same seven-second custom countdown.
 - Separate preview homes render the default settings and agent picker without Cockpit or input.

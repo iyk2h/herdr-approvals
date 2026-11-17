@@ -124,7 +124,7 @@ export default class Approvals extends View {
     const zoom = typeof scale === 'number' && Number.isFinite(scale) && scale > 0 ? scale : 1;
     const fit = (preferred, available) => Number.isFinite(available) && available > 0
       ? Math.min(preferred, Math.max(1, available / zoom - 32)) : preferred;
-    this.popupId = openOverlay({ mod: 'approvals', kind: 'dialog', width: fit(480, viewport?.width), height: fit(720, viewport?.height),
+    this.popupId = openOverlay({ mod: 'approvals', kind: 'dialog', width: fit(480, viewport?.width),
       props: { presentation: true, ownerId: this.ownerId, dialogToken: dialog.token, tab: dialog.tab } });
   }
   relay(action) {
