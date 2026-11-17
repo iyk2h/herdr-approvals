@@ -1,13 +1,14 @@
-# Gallery release draft
+# Gallery release
 
 ## Repository description
 
-Native Codex permission controls for Herdr, with manual replies, optional automatic approval, and per-agent countdowns.
+Codex permission controls for Herdr. Manual replies, optional automatic approval, and a countdown for each agent. Cockpit is optional.
 
 ## Release description
 
 Herdr Approvals adds permission controls for supported local Codex menus in English.
 Automatic approval is off by default. Cockpit is optional.
+Supported requests include command execution and terminal input. Terminal input approvals always allow once.
 
 The mod provides these controls:
 
@@ -24,3 +25,9 @@ In a popup, Esc closes the window. The global cancel command stops all current a
 Validation used macOS, automated approval and installer checks, eleven native UI states, and trials with fictional terminals.
 The fixtures receive replies but execute no real Codex commands.
 Linux and other Codex menu formats remain unvalidated.
+
+## Gallery registration
+
+The [repository](https://github.com/iyk2h/herdr-approvals) contains the mod, recipe, and screenshots with fictional requests.
+The `herdr-mod` topic makes the public repository available to the gallery index.
+The [Herdr gallery](https://herdr.dev/gallery/?type=mods) lists automatic updates within an hour. Preview images require separate screening.

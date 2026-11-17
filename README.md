@@ -55,6 +55,12 @@ Validation used macOS. Linux is not yet validated.
 
 ## Install
 
+For installation by an agent, give it this instruction:
+
+```text
+Read ~/.config/herdr-app/AGENTS.md, then install the Approvals mod from https://github.com/iyk2h/herdr-approvals.
+```
+
 Copy `mods/approvals/` to `~/.config/herdr-app/mods/approvals/`.
 Alternatively, install the mod with Python 3:
 
@@ -129,7 +135,7 @@ See [validation](docs/validation.md) for coverage and limits.
 
 ## Gallery and license
 
-Gallery indexing requires a public repository with the `herdr-mod` topic. Publication is a separate step.
+The repository uses the `herdr-mod` topic for the [Herdr gallery](https://herdr.dev/gallery/?type=mods).
 
 Apache-2.0 permits use, modification, and distribution under its terms.
 The parser retains attribution to Cockpit and herdr-relevo.
