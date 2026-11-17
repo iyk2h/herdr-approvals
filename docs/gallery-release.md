@@ -1,5 +1,13 @@
 # Gallery release
 
+## Gallery description
+
+You can read Codex permission requests and send replies from a Herdr panel.
+Optional automatic approval sends a reply after a delay that you set.
+Each agent has its own countdown, which you can cancel before it ends.
+Automatic approval is off by default and excludes options that allow all commands or bypass checks.
+The mod supports local Codex agents with English permission menus on macOS. Cockpit is optional.
+
 ## Repository description
 
 Codex permission controls for Herdr. Manual replies, optional automatic approval, and a countdown for each agent. Cockpit is optional.
