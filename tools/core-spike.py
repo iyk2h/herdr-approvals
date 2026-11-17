@@ -52,13 +52,13 @@ try:
     fixtures = []
     for index in range(2):
         receipt = scratch / ('receipt-' + str(index) + '.json')
-        fixture = rpc('terminal.run', {'argv':[sys.executable,str(root / 'tools/fixture-tui.py'),str(receipt)],'cwd':str(scratch),'no_parent':True,'no_notify':True,'size':{'cols':120,'rows':30}})
+        fixture = rpc('terminal.run', {'argv':[sys.executable,str(root / 'tools/fixture-tui.py'),str(receipt),'terminal-input' if index else 'command'],'cwd':str(scratch),'no_parent':True,'no_notify':True,'size':{'cols':120,'rows':30}})
         result = fixture['result']
         address = result.get('terminal', result).get('address') if isinstance(result.get('terminal', result), dict) else None
         assert address, 'Fixture terminal address missing: ' + json.dumps(result)[:300]
         fixtures.extend([address, str(receipt)])
     command([shutil.which('node'),str(root / 'tools/native-smoke.mjs'),*fixtures], timeout=45)
-    evidence = {'isolated_session':env['HC_SESSION'],'core_version':status['version'],'empty_core':True,'rpc_helper':'passed','atomic_claim_conflict':'passed','real_native_input':'passed','independent_countdowns':2,'custom_delay_seconds':7,'cleanup':'isolated core stopped'}
+    evidence = {'isolated_session':env['HC_SESSION'],'core_version':status['version'],'empty_core':True,'rpc_helper':'passed','atomic_claim_conflict':'passed','real_native_input':'passed','request_kinds':['command','terminal-input'],'independent_countdowns':2,'custom_delay_seconds':7,'cleanup':'isolated core stopped'}
     (root / 'core-spike-result.json').write_text(json.dumps(evidence,indent=2) + '\n')
     print(json.dumps(evidence,indent=2))
 finally:

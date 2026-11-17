@@ -5,7 +5,7 @@ A native permission panel for Herdr. Cockpit is optional.
 ![Requests and settings](preview.png)
 
 By default, the mod opens in a 360px right panel. It uses the active Herdr theme.
-**Requests** shows the command, numbered replies, and an automatic approval countdown.
+**Requests** shows the requested action, numbered replies, and an automatic approval countdown.
 **Settings** controls automatic approval, delay, agents, the automatic reply, and the connection.
 
 You can add a 40px strip through a personal layout. Its height stays fixed.
@@ -19,7 +19,7 @@ Select a reply. Then press Enter.
 In a popup, Esc closes the window.
 In the full panel, Esc stops all current automatic requests.
 Selection stops that request's countdown. Other agents continue counting down.
-Cancellation does not reject the command. The global cancel command stops all current countdowns.
+Cancellation does not reject the request. The global cancel command stops all current countdowns.
 
 ## Automatic approval
 
@@ -28,8 +28,11 @@ You can include all supported local Codex agents or select agents before a reque
 The **All agents** setting includes new local Codex agents in Herdr.
 A selection applies to the current terminal process. A new process requires a new selection.
 
-The mod supports local Codex permission menus in English.
-**Allow once** permits one command. **Save command rule** selects a command rule that Codex offers.
+The mod supports local Codex command and terminal input permission menus in English.
+Terminal input approvals use the current delay and always allow once.
+The target, environment, reason, quoted input, and confirmation menu must be complete.
+Wrapped input remains manual.
+**Allow once** permits one request. **Save command rule** selects a command rule that Codex offers.
 If no supported rule exists, automatic approval selects **Allow once**.
 Automatic approval excludes recognized all-command and bypass options.
 In **Save command rule** mode, multiple rule choices require a manual reply.

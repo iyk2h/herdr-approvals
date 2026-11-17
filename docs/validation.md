@@ -6,6 +6,7 @@ All prompts and commands in the test fixtures are fictional.
 The automated checks cover these behaviors:
 
 - Tests cover parsing, command identity, cursor movement, countdowns, cancellation, competing replies, durable claims, and uncertain delivery.
+- Terminal input tests bind the target, escaped input, environment, and reason. They check the delay, fresh cursor, cancellation, uncertain delivery, and one-time replies in both approval modes.
 - Agent catalog tests cover selection before a request arrives, inactive selections, and new agents under all or selected scope.
 - Recovery tests discard stale requests after connection errors and preserve durable input records.
 - Shared setting tests stop stale countdowns and prevent hidden replies from the settings tab.
@@ -19,8 +20,8 @@ The automated checks cover these behaviors:
 - Popup lifecycle tests open and close settings 30 times without replacing the controller or writing input records.
 - Popup sizing tests preserve the controller, popup token, focus, and delay input through empty requests, pending requests, and settings.
 - An isolated native geometry trial checks those states in large and small windows, including 150% zoom. The same popup resizes without input or journal records.
-- Native checks render ten full and compact states, including custom delays, without input or persistent changes.
-- An isolated core reads two fictional TUIs. Both receive one reply through the native provider after the same seven-second custom countdown.
+- Native checks render eleven full and compact states, including terminal input and custom delays, without input or persistent changes.
+- An isolated core reads fictional command and terminal input TUIs. Both receive one reply through the native provider after the same seven-second custom countdown.
 - Separate preview homes render the default settings and agent picker without Cockpit or input.
 
 Installation into a scratch Herdr home succeeds.

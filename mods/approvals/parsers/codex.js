@@ -5,9 +5,11 @@
 
 const OPTION = /^\s*([❯›>]\s*)?(\d+)\.\s+(.+?)\s*$/;
 const HEADER = /^\s*Would you like to run the following command\?\s*$/i;
+const INPUT_HEADER = /^\s*Would you like to send input to terminal ([1-9]\d{0,19})\?\s*$/i;
 const PROCEED = /^Yes,?\s*proceed(?:\s*\(y\))?$/i;
 const DENY = /^No,\s*and tell Codex what to do differently(?:\s*\(esc\))?$/i;
 const FREE = /^(?:\[[ xX✔✓✗]?\]|Type something\b|Chat about this\b)/i;
+const QUOTED_INPUT = /^"(?:[^"\\\x00-\x1f\ufffd]|\\(?:["\\nrt0bf/]|u\{[0-9a-fA-F]{1,6}\}|u[0-9a-fA-F]{4}|x[0-9a-fA-F]{2}))*"$/;
 
 function screenLines(screen) {
   return screen
@@ -18,11 +20,38 @@ function screenLines(screen) {
     .map(line => line.replace(/^[│┃]\s?/, '').replace(/\s?[│┃]\s*$/, '').trimEnd());
 }
 
+function terminalInput(lines, header, options) {
+  if (options.length !== 2 || !PROCEED.test(options[0].label) || !DENY.test(options[1].label)) return null;
+  const body = lines.slice(header + 1, options[0].line);
+  const inputs = body.filter(line => /^\s*Input:/.test(line));
+  const environments = body.filter(line => /^\s*Environment:/.test(line));
+  const reasons = body.filter(line => /^\s*Reason:/.test(line));
+  if (inputs.length !== 1 || environments.length !== 1 || reasons.length !== 1) return null;
+  if (!/^\s*Environment:\s*\S/.test(environments[0]) || !/^\s*Reason:\s*\S/.test(reasons[0])) return null;
+  const environmentAt = body.indexOf(environments[0]), reasonAt = body.indexOf(reasons[0]), inputAt = body.indexOf(inputs[0]);
+  if (environmentAt >= reasonAt || reasonAt >= inputAt
+    || body.slice(0, environmentAt).some(line => line.trim())
+    || body.slice(environmentAt + 1, reasonAt).some(line => line.trim())
+    || body.slice(inputAt + 1).some(line => line.trim())
+    || lines.slice(options[0].line + 1, options[1].line).some(line => line.trim())) return null;
+  const input = inputs[0].replace(/^\s*Input:\s*/, '').trim();
+  if (!QUOTED_INPUT.test(input)) return null;
+  const tail = lines.slice(options[1].line + 1).map(line => line.trim()).filter(Boolean);
+  if (tail.length !== 1 || !/^Press enter to confirm or esc to cancel$/i.test(tail[0])) return null;
+  const terminalId = INPUT_HEADER.exec(lines[header])[1];
+  const text = lines[header].trim();
+  const choices = options.map(option => ({ n: option.n, label: option.label.trim(), description: '', free: false }));
+  return { kind: 'terminal-input', terminalId, input, text, command: `Input: ${input}`, choices,
+    cursor: options.find(option => option.selected).n,
+    fingerprint: JSON.stringify(['codex-terminal-input-v1', text, body.join('\n').trim(), choices.map(choice => [choice.n, choice.label])]),
+  };
+}
+
 export function parseCodex(screen) {
   if (typeof screen !== 'string' || screen.length > 65536) return null;
   const lines = screenLines(screen);
   let header = -1;
-  for (let i = 0; i < lines.length; i += 1) if (HEADER.test(lines[i])) header = i;
+  for (let i = 0; i < lines.length; i += 1) if (HEADER.test(lines[i]) || INPUT_HEADER.test(lines[i])) header = i;
   if (header < 0) return null;
 
   const options = [];
@@ -34,6 +63,7 @@ export function parseCodex(screen) {
   if (options.some((option, index) => option.n !== index + 1 || FREE.test(option.label))) return null;
   const selected = options.filter(option => option.selected);
   if (selected.length !== 1) return null;
+  if (INPUT_HEADER.test(lines[header])) return terminalInput(lines, header, options);
 
   const first = options[0].line;
   const commandAt = lines.findIndex((line, index) => index > header && index < first && /^\s*\$\s+\S/.test(line));

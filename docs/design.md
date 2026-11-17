@@ -15,6 +15,8 @@ This separation lets a user select an agent before it requests permission.
 The setting for all agents includes future local Codex agents. Individual selections use the current terminal process identity.
 
 The parser keeps the full command and reply descriptions in the request fingerprint.
+Terminal input identities include the target terminal, escaped input, environment, and reason.
+Input approvals always allow once. The mod answers the Codex menu; it does not send the displayed payload itself.
 Cursor position stays separate. The latest cursor determines the required arrow keys.
 Only exact agent aliases and recognized permission menus qualify for input.
 Authentication prompts, text questions, and missing process metadata do not qualify.

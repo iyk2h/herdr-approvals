@@ -2,7 +2,60 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {parseCodex, inputKeys} from '../mods/approvals/parsers/codex.js';
 import {chooseApproval} from '../mods/approvals/policy.js';
-import {basicPrompt, codexPrompt} from './fixtures/prompts.mjs';
+import {basicPrompt, codexPrompt, terminalInputPrompt} from './fixtures/prompts.mjs';
+
+test('recognizes a complete terminal input permission and allows it once in either approval mode', () => {
+  const question = parseCodex(terminalInputPrompt());
+  assert.ok(question, 'terminal input approvals must enter the existing request flow');
+  assert.equal(question.kind, 'terminal-input');
+  assert.equal(question.terminalId, '24680');
+  assert.equal(question.input, '"\\u{3}"');
+  assert.equal(question.command, 'Input: "\\u{3}"');
+  assert.equal(chooseApproval(question, 'once'), 1);
+  assert.equal(chooseApproval(question, 'remember'), 1);
+  assert.deepEqual(inputKeys(question, 1), ['enter']);
+});
+
+test('rejects incomplete or ambiguous terminal input approvals instead of inferring the missing data', () => {
+  const prompt = terminalInputPrompt();
+  for (const screen of [
+    terminalInputPrompt({ terminal: '' }), terminalInputPrompt({ terminal: '../24680' }),
+    terminalInputPrompt({ input: '"\\u{3}' }), terminalInputPrompt({ input: 'Ctrl+C' }),
+    terminalInputPrompt({ input: '"\\q"' }), terminalInputPrompt({ input: '"\\u{}"' }),
+    terminalInputPrompt({ input: '"damaged\ufffdinput"' }),
+    prompt.replace('Environment: local\n', ''),
+    prompt.replace('Reason: Send input to an existing terminal.\n', ''),
+    prompt.replace('Input:', 'Environment: remote\nInput:'),
+    prompt.replace('❯ 1.', '1.'), prompt.replace('  2.', '❯ 2.'),
+    prompt.replace('Press enter to confirm or esc to cancel', ''),
+    prompt.replace('Input:', 'Input: "other"\nInput:'),
+    prompt.replace('  2. No,', '     Extra action\n  2. No,'),
+    prompt.replace('❯ 1.', 'New context\n❯ 1.'),
+  ]) assert.equal(parseCodex(screen), null, screen);
+});
+
+test('terminal input identity binds its target, full escaped input, environment and reason while cursor changes stay separate', () => {
+  const original = parseCodex(terminalInputPrompt());
+  for (const patch of [{ terminal: '24681' }, { input: '"exit\\n"' }, { environment: 'other' }, { reason: 'A changed operation.' }]) {
+    assert.notEqual(parseCodex(terminalInputPrompt(patch)).fingerprint, original.fingerprint);
+  }
+  const moved = parseCodex(terminalInputPrompt({ cursor: 2 }));
+  assert.equal(moved.fingerprint, original.fingerprint);
+  assert.deepEqual(inputKeys(moved, 1), ['up', 'enter']);
+  assert.equal(parseCodex(basicPrompt + '\n' + terminalInputPrompt()).fingerprint, original.fingerprint);
+  for (const input of ['""', '"yes\\n"', '"quoted \\"text\\" and \\\\ path"', '"\\u0003"', '"\\u{1b}"']) {
+    assert.equal(parseCodex(terminalInputPrompt({ input })).input, input);
+  }
+});
+
+test('terminal input approval never saves a command rule even if a caller supplies rule choices', () => {
+  const question = parseCodex(terminalInputPrompt());
+  const withRule = { ...question, choices: [
+    ...question.choices,
+    { n: 3, label: "Yes, and don't ask again for commands that start with `pnpm test`", description: '', free: false },
+  ] };
+  assert.equal(chooseApproval(withRule, 'remember'), 1);
+});
 
 test('reads a complete Codex permission menu without losing its command or choice labels', () => {
   const question = parseCodex(basicPrompt);

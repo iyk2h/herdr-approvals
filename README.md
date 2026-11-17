@@ -14,7 +14,7 @@ Automatic approval is off by default.
 | Auto-approve | Sends the automatic reply after the delay. |
 | Delay | Select 3, 5, or 10 seconds. For a custom delay, enter 1–3,600 whole seconds. Then select Apply. |
 | Agents | Includes all supported local Codex agents, or only selected agents. |
-| Automatic reply | Allows one command, or saves a command rule that Codex offers. |
+| Automatic reply | Allows one request, or saves a command rule that Codex offers. |
 | Connection | Uses Herdr directly, or an existing local Cockpit installation. |
 
 **All agents** includes new local Codex agents in Herdr.
@@ -22,11 +22,12 @@ Automatic approval is off by default.
 Selection applies to the current terminal process. A new process requires a new selection.
 See the [agent picker](agents-preview.png).
 
-**Allow once** permits the current command.
+**Allow once** permits the current request.
 **Save command rule** selects a command rule that Codex offers.
 If no supported rule exists, automatic approval selects **Allow once**.
 Automatic approval excludes recognized all-command and bypass options.
 In **Save command rule** mode, multiple rule choices require a manual reply.
+Terminal input approvals always use **Allow once**, including in **Save command rule** mode.
 
 ## Reply
 
@@ -46,6 +47,9 @@ The mod requires these components:
 - A local Codex agent with the supported English permission menu.
 
 Claude, remote agents, authentication prompts, text questions, and checkbox forms do not accept input through this version.
+Supported requests include command execution and terminal input, such as Ctrl+C.
+Terminal input requires a complete target, environment, reason, quoted input, and confirmation menu.
+The quoted input must fit on one visible line. Wrapped or incomplete input remains manual.
 Node and Python are development tools. The mod requires neither at runtime.
 Validation used macOS. Linux is not yet validated.
 

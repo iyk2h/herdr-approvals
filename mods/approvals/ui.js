@@ -99,7 +99,7 @@ function settings(view) {
   }
   body.child(setting('Automatic reply', view.mode === 'remember'
     ? 'Use an offered command rule. If no supported rule exists, allow once. Multiple rules require a manual reply.'
-    : 'Allow the current command once. Do not save a rule.',
+    : 'Allow this request once. Do not save a rule.',
   segmented('approvals-mode', [{ value: 'once', label: 'Allow once' }, { value: 'remember', label: 'Save command rule' }],
     view.mode, (value, cx) => view.setMode(value, cx), disabled)));
   body.child(separator());

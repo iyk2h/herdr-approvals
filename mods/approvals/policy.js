@@ -11,6 +11,7 @@ export function chooseApproval(question, mode = 'once') {
   if (choices.filter(deny).length !== 1) return null;
   const single = choices.filter(proceed);
   if (single.length !== 1) return null;
+  if (question.kind === 'terminal-input') return single[0].n;
   if (mode === 'remember') {
     const scopes = choices.filter(remembered);
     if (scopes.length > 1) return null;

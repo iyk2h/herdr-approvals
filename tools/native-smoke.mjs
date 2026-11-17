@@ -35,6 +35,7 @@ for(let i=0;i<40;i++){
   await new Promise(resolve=>setTimeout(resolve,50));
 }
 assert.deepEqual(controller.rows.map(row=>row.address).sort(),fixtures.map(row=>row.address).sort());
+assert.equal(controller.rows.filter(row=>row.question.kind==='terminal-input').length,1,'the mixed batch must include a real terminal input permission screen');
 assert.ok(controller.pending,'Native parser must recognize the real core screen');
 now=7999;await controller.tick();
 for(const {receipt} of fixtures)assert.equal(existsSync(receipt),false);
@@ -45,4 +46,4 @@ const attempts=await journal.entries();assert.equal(attempts.filter(entry=>entry
 const reopened=new ApprovalController({provider,journal:new CasJournal(journalHost,'herdr.approvals.smoke'),now:()=>now});
 reopened.setEnabled(true);await reopened.refresh();await reopened.tick();
 for(const {receipt} of fixtures)assert.deepEqual(JSON.parse(readFileSync(receipt,'utf8')),{choice:1,fixture:true});
-console.log('PASS: isolated core screens -> independent 7-second countdowns -> durable CAS -> exactly one native reply per fixture; no Cockpit');
+console.log('PASS: command and terminal input screens -> independent 7-second countdowns -> durable CAS -> exactly one native reply per fixture; no Cockpit');

@@ -19,6 +19,15 @@ export const codexPrompt = ({
 
 export const basicPrompt = codexPrompt();
 
+export const terminalInputPrompt = ({ terminal = '24680', input = '"\\u{3}"', cursor = 1,
+  environment = 'local', reason = 'Send input to an existing terminal.' } = {}) => [
+  `Would you like to send input to terminal ${terminal}?`,
+  '', `Environment: ${environment}`, '', `Reason: ${reason}`, '', `Input: ${input}`, '',
+  `${cursor === 1 ? '❯' : ' '} 1. Yes, proceed (y)`,
+  `${cursor === 2 ? '❯' : ' '} 2. No, and tell Codex what to do differently (esc)`,
+  '', 'Press enter to confirm or esc to cancel',
+].join('\n');
+
 export function deferred() {
   let resolve;
   let reject;
