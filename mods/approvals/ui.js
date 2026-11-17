@@ -160,16 +160,21 @@ function requests(view, row) {
   return body.child(choices);
 }
 
-function notice(view) {
+function notice(view, row) {
   const controller = view.controller;
   if (view.error || controller.error) return description(String(view.error || controller.error));
+  const request = controller.statusRequest;
+  const matches = row && request && row.sessionKey === request.sessionKey && row.episode === request.episode
+    && row.question.fingerprint === request.fingerprint;
+  if (['validating', 'dispatching', 'sending', 'sent', 'changed'].includes(controller.status) && !matches) return null;
+  if (controller.status === 'unknown' && !row?.quarantined && !matches) return null;
   const texts = {
     validating: 'The panel reads the latest request.',
     dispatching: 'Reply in progress. Cancellation is no longer possible.',
     sending: 'Reply in progress. Cancellation is no longer possible.',
     sent: 'The panel sent your reply.',
     unknown: 'Delivery is uncertain.',
-    cancelled: 'Automatic approval stopped.',
+    cancelled: controller.pending ? 'Other requests continue to count down.' : 'Automatic approval stopped.',
     changed: 'The request changed. The panel stopped the reply.',
   };
   return texts[controller.status] ? description(texts[controller.status]) : null;
@@ -188,14 +193,14 @@ function compactPanel(view) {
     .track_focus(view.focus).on_key_down((event, cx) => { if (view.key(event, cx)) cx.stop_propagation(); })
     .child(div().flex_1().min_w(0).truncate().font_semibold().text_size(13).child('Approvals'))
     .child(autoToggle('approvals-compact-auto', view))
-    .child(button('approvals-compact-requests', div().whitespace_nowrap().text_size(12).child(status), cx => row ? view.review(row, cx) : view.setTab('requests', cx),
+    .child(button('approvals-compact-requests', div().min_w(0).truncate().text_size(12).child(status), cx => row ? view.review(row, cx) : view.setTab('requests', cx),
       { compact: true, align: 'center', disabled: view.preview || view.busy || controller.busy }).w(78).flex_none().px(4).py(3))
     .child(button('approvals-compact-settings', div().whitespace_nowrap().child('Settings'), cx => view.setTab('settings', cx),
       { compact: true, align: 'center', disabled: view.preview }).w(64).flex_none().px(4).py(3));
 }
 
 function requestPanel(root, view, row) {
-  const timer = countdown(view), status = notice(view);
+  const timer = countdown(view), status = notice(view, row);
   if (timer) root.child(timer);
   if (status) root.child(status);
   if (row?.quarantined) root.child(description('Reply in the agent terminal.'));

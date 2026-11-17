@@ -63,7 +63,9 @@ export default class Approvals extends View {
     const updates = entry.dialog.updates;
     cx.spawn(async cx => {
       while (!this.closed && await updates.next()) {
-        if (!presentation(this.ownerId, this.dialogToken)) break;
+        const current = presentation(this.ownerId, this.dialogToken);
+        if (this.closed || !current) break;
+        this.syncDelayInput(current.owner.delayMs);
         cx.notify();
       }
     });
@@ -71,13 +73,22 @@ export default class Approvals extends View {
   changed(cx) { if (!this.presentation) publish(this.ownerId); cx.notify(); }
   initDelayInput(_cx) {
     if (this.delayInput) return;
-    this.delayInput = InputState.new({ value: String(savedDelay(this.delayMs) / 1000) });
+    this.delayInputSaved = String(savedDelay(this.delayMs) / 1000);
+    this.delayInput = InputState.new({ value: this.delayInputSaved });
     this.delayError = null;
     this.delayInput.on('change', (_event, cx) => { this.delayError = null; cx.notify(); });
     this.delayInput.on('submit', (_event, cx) => this.applyDelayInput(cx));
   }
+  syncDelayInput(ms) {
+    if (this.closed || !this.delayInput) return;
+    const value = this.delayInput.value();
+    const saved = String(savedDelay(ms) / 1000);
+    if (value === this.delayInputSaved && value !== saved) this.delayInput.set_value(saved);
+    this.delayInputSaved = saved;
+  }
   applyDelayInput(cx) {
     if (this.preview || this.closed) return false;
+    this.syncDelayInput(savedDelay(shared('approvals.delay')));
     const ms = parseDelaySeconds(this.delayInput?.value());
     if (ms === null) {
       this.delayError = 'Enter a whole number from 1 to 3,600.';
@@ -85,6 +96,8 @@ export default class Approvals extends View {
       return false;
     }
     this.delayError = null;
+    const value = String(ms / 1000);
+    if (this.delayInput.value() !== value) this.delayInput.set_value(value);
     cx.notify();
     return this.presentation ? this.relay({ action: 'delay', value: ms }) : this.setDelay(ms, cx);
   }
@@ -226,13 +239,14 @@ export default class Approvals extends View {
       }
     });
   }
-  syncSettings() {
+  syncSettings(syncInput = true) {
     if (this.preview || this.closed) return;
     this.controller.setEnabled(shared('approvals.enabled') === true);
     const mode = shared('approvals.mode') === 'remember' ? 'remember' : 'once';
     if (mode !== this.mode) { this.mode = mode; this.controller.setMode(mode); }
     const delay = savedDelay(shared('approvals.delay'));
     if (delay !== this.delayMs) { this.delayMs = delay; this.controller.setDelay(delay); }
+    if (syncInput) this.syncDelayInput(delay);
     const scope = shared('approvals.scope') === 'selected' ? 'selected' : 'all';
     const selected = Array.isArray(shared('approvals.sessions')) ? shared('approvals.sessions').filter(key => typeof key === 'string').slice(0, 40) : [];
     const signature = JSON.stringify([scope, selected]);
@@ -316,7 +330,7 @@ export default class Approvals extends View {
   render(cx) {
     if (this.presentation) return panel(this.presentationView(), cx);
     if (!this.preview) {
-      this.syncSettings();
+      this.syncSettings(false);
       const signature = JSON.stringify(agents().map(agent => [agent.address, agent.seq, agent.status]));
       if (signature !== this.signature) { this.signature = signature; this.refresh(cx); }
     }

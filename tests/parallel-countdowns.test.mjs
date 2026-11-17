@@ -271,3 +271,50 @@ test('a failed durable cancellation clears other due countdowns instead of resch
   assert.equal(h.controller.pending, null, 'a permanently failing flush cannot leave an expired timer for the owner to reschedule');
   assert.deepEqual(addresses(h), []);
 });
+
+for (const change of ['delay', 'mode']) {
+  for (const action of ['cancel', 'disable', 'close']) {
+    test(`global ${action} after a ${change} change cancels visible requests before replacement countdowns start`, async () => {
+      const h = await ready();
+      h.at(1000);
+      if (change === 'delay') h.controller.setDelay(7000);
+      else h.controller.setMode('remember');
+      assert.equal(h.controller.pending, null, 'the policy change creates a gap before the next refresh');
+      assert.equal(h.controller.rows.length, 2, 'both permission requests remain visible during that gap');
+      if (action === 'cancel') h.controller.cancel();
+      else if (action === 'disable') h.controller.setEnabled(false);
+      else h.controller.close();
+      await h.controller.flush();
+      let now = 10000;
+      const reloaded = new ApprovalController({ provider: h.provider, journal: h.journal,
+        delayMs: h.controller.delayMs, mode: h.controller.mode, now: () => now });
+      reloaded.setEnabled(true);
+      await reloaded.refresh();
+      now = 50000;
+      await reloaded.tick();
+      assert.deepEqual(addresses(h), [], 'no visible cancelled request can regain automatic approval after reload');
+    });
+  }
+}
+
+test('dispatch status identifies the exact request throughout validation and completion', async () => {
+  const h = await ready();
+  h.controller.cancel(h.provider.current[0].sessionKey);
+  const target = h.provider.current[1];
+  const entered = deferred(), release = deferred();
+  const read = h.provider.readQuestion.bind(h.provider);
+  h.provider.readQuestion = async row => {
+    if (row.sessionKey === target.sessionKey) { entered.resolve(); await release.promise; }
+    return read(row);
+  };
+  h.at(3000);
+  const ticking = h.controller.tick();
+  await entered.promise;
+  const validating = structuredClone(h.controller.statusRequest);
+  release.resolve();
+  await ticking;
+  const expected = { sessionKey: target.sessionKey, episode: target.episode, fingerprint: target.question.fingerprint };
+  assert.deepEqual(validating, expected, 'validation status must identify its source request');
+  assert.equal(h.controller.status, 'sent');
+  assert.deepEqual(h.controller.statusRequest, expected, 'a completed sibling reply must retain its own identity');
+});

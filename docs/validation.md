@@ -10,12 +10,17 @@ The automated checks cover these behaviors:
 - Recovery tests discard stale requests after connection errors and preserve durable input records.
 - Shared setting tests stop stale countdowns and prevent hidden replies from the settings tab.
 - Popup tests cover shared controller state, safe setting actions, closed popups, and stale request actions.
+- Cancellation tests include the interval between a policy change and the next request refresh.
+- Delay input tests preserve unsaved text and prevent stale Apply actions from replacing an external setting change.
+- Request notices use the matching agent, episode, and command identity.
 - Native checks render ten full and compact states, including custom delays, without input or persistent changes.
 - An isolated core reads two fictional TUIs. Both receive one reply through the native provider after the same seven-second custom countdown.
 - Separate preview homes render the default settings and agent picker without Cockpit or input.
 
 Installation into a scratch Herdr home succeeds.
 Without `--update`, a second installation stops before it overwrites the mod.
+Installer checks cover saved backups, obsolete file removal, and interrupted copies.
+The installer leaves keys, layouts, Cockpit, and shared settings unchanged.
 
 Live trials on 2026-11-17 used fictional agent terminals in the installed Herdr app.
 Both connections delivered one allow-once reply after a configured three-second delay.
@@ -32,6 +37,7 @@ Reproduction commands:
 ```sh
 npm test
 npm run check:package
+npm run check:install
 python3 tools/native-check.py
 python3 tools/core-spike.py
 python3 tools/preview.py

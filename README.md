@@ -62,6 +62,8 @@ herdr-app check ~/.config/herdr-app/mods/approvals
 The panel opens on the right. The installer preserves Cockpit, key bindings, and existing settings.
 If the folder exists, add `--update`.
 Updates save the previous mod in `~/.local/share/herdr-approvals/backups/`.
+The installer prepares the new files before replacement. Copy errors leave the installed mod unchanged.
+Successful updates remove obsolete files.
 
 For manual placement, set `place` to `none` in `mod.json` before installation.
 Then add a layout block with `content: {mod: "approvals"}`.
@@ -104,11 +106,12 @@ See [design](docs/design.md) for delivery and recovery details.
 
 ## Development
 
-The tests require Node 24 and no npm dependencies. The native tools require Python 3.
+Development checks use Node 24 and Python 3. No npm dependencies are necessary.
 
 ```sh
 npm test
 npm run check:package
+npm run check:install
 python3 tools/native-check.py
 python3 tools/core-spike.py
 python3 tools/preview.py

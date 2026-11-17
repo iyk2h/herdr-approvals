@@ -21,6 +21,6 @@ When countdowns end, the mod sends replies one at a time.
 Selecting the request count in the strip stops automatic approval for that request.
 In a popup, Esc closes the window. The global cancel command stops all current automatic requests.
 
-Validation used macOS, 114 automated tests, ten native UI states, and trials with fictional terminals.
+Validation used macOS, 133 Node tests, four installer checks, ten native UI states, and trials with fictional terminals.
 The fixtures receive replies but execute no real Codex commands.
 Linux and other Codex menu formats remain unvalidated.

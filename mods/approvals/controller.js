@@ -27,6 +27,7 @@ export class ApprovalController {
     this.selectionSnapshot = null;
     this.busy = false;
     this.status = 'idle';
+    this.statusRequest = null;
     this.error = null;
     this.generation = 0;
     this.sessionGenerations = new Map();
@@ -123,7 +124,7 @@ export class ApprovalController {
   cancel(sessionKey) {
     const rows = sessionKey
       ? [this.active?.sessionKey === sessionKey ? this.active : this.rows.find(item => item.sessionKey === sessionKey)]
-      : [...this.countdowns.values()].map(entry => entry.row).concat(this.active ?? []);
+      : this.rows.concat([...this.countdowns.values()].map(entry => entry.row), this.active ?? []);
     const requests = new Map(rows.filter(usable).map(row => [this.key(row), row]));
     for (const [key, row] of requests) {
       this.suppressed.add(key);
@@ -243,6 +244,7 @@ export class ApprovalController {
     this.cancel(sessionKey);
     if (snapshot && (!row || row.episode !== snapshot.episode || row.question?.fingerprint !== snapshot.fingerprint)) {
       this.status = 'changed';
+      this.statusRequest = row ? { sessionKey: row.sessionKey, episode: row.episode, fingerprint: row.question.fingerprint } : null;
       return { status: 'changed' };
     }
     if (!usable(row) || !Number.isInteger(choice) || !row.question.choices.some(item => item.n === choice && !item.free)) {
@@ -270,6 +272,7 @@ export class ApprovalController {
     this.countdowns.delete(key);
     this.syncPending();
     this.status = 'validating';
+    this.statusRequest = { sessionKey: row.sessionKey, episode: row.episode, fingerprint: row.question.fingerprint };
     this.error = null;
     try {
       await this.flush();

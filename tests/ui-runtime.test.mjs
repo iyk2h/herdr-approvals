@@ -9,10 +9,12 @@ import { sha256 } from '../mods/approvals/digest.js';
 
 const state=new Map();const commands=[];const overlays=[];const closedOverlays=[];let io=0;let check=true;
 globalThis.__approvalElement=()=>new Proxy({}, {get:(_target,key)=>key==='then'?undefined:(...args)=>globalThis.__approvalElement()});
+globalThis.__approvalReleasedAccesses=0;
 globalThis.__approvalInput=(options={})=>{
-  let value=options.value??'';const events=new Map();
-  return {value:()=>value,set_value:next=>{value=next;},on:(name,callback)=>{events.set(name,callback);return true;},
-    emit:(name,cx)=>events.get(name)?.({},cx),focus(){},release(){return true;}};
+  let value=options.value??'',released=false;const events=new Map();
+  const usable=()=>{if(released){globalThis.__approvalReleasedAccesses++;throw new Error('Input state is released');}};
+  return {value:()=>{usable();return value;},set_value:next=>{usable();value=next;},on:(name,callback)=>{events.set(name,callback);return true;},
+    emit:(name,cx)=>events.get(name)?.({},cx),focus(){},release(){released=true;return true;}};
 };
 globalThis.__approvalHost={
   checking:()=>check,shared:key=>state.get(key),setShared:(key,value)=>state.set(key,value),settings:()=>({zoom:1}),
@@ -28,6 +30,7 @@ const definitions={
 };
 registerHooks({resolve(specifier,context,next){return definitions[specifier]?{url:`data:text/javascript,${encodeURIComponent(definitions[specifier])}`,shortCircuit:true}:next(specifier,context);}});
 const {default:Approvals}=await import('../mods/approvals/main.js');
+const {panel}=await import('../mods/approvals/ui.js');
 function context(){const timers=[];return{timers,focus_handle:()=>({focus(){}}),notify(){},timer:{after(ms,run){timers.push(run);return{cancel(){}};},every(){throw new Error('Unexpected live timer in check');}},spawn(fn){return fn(context());},stop_propagation(){}};}
 
 test('checking renders the real approval panel without starting IO, timers or writes',()=>{
@@ -402,5 +405,143 @@ test('popup delay drafts stay local and Apply or Enter reaches only the current 
   assert.equal(await popup.applyDelayInput(popupCx),false);
   assert.equal(ownerActions,2,'closed popup capabilities cannot mutate settings');
   assert.equal(state.get('approvals.delay'),11000);
+  owner.close();
+});
+
+test('an untouched delay input follows saved changes from another view without writing settings',async()=>{
+  const {owner,controller,cx}=await ownerModel();
+  owner.initDelayInput(cx);
+  assert.equal(owner.delayInput.value(),'3');
+  state.set('approvals.delay',7000);
+  const before=new Map(state);
+  owner.syncSettings();
+  assert.equal(owner.delayInput.value(),'7','a pristine field must show the actual saved duration');
+  assert.equal(controller.delayMs,7000);
+  assert.deepEqual(state,before,'updating a field is not a setting change');
+  owner.close();
+});
+
+test('an external delay change preserves unsaved and invalid input drafts',async()=>{
+  const {owner,cx}=await ownerModel();
+  owner.initDelayInput(cx);
+  for(const [draft,external] of [['9',7000],['0',11000]]){
+    owner.delayInput.set_value(draft);
+    owner.delayInput.emit('change',cx);
+    state.set('approvals.delay',external);
+    owner.syncSettings();
+    assert.equal(owner.delayInput.value(),draft,'a settings update cannot erase user input');
+    assert.equal(state.get('approvals.delay'),external,'an unsaved draft cannot replace the external setting');
+  }
+  assert.equal(await owner.applyDelayInput(cx),false,'an invalid preserved draft still requires correction');
+  assert.equal(state.get('approvals.delay'),11000);
+  owner.close();
+});
+
+test('a successfully applied delay becomes pristine for the next external update',async()=>{
+  const {owner,cx}=await ownerModel();
+  owner.initDelayInput(cx);
+  owner.delayInput.set_value('7');
+  owner.delayInput.emit('change',cx);
+  assert.equal(await owner.applyDelayInput(cx),true);
+  state.set('approvals.delay',11000);
+  owner.syncSettings();
+  assert.equal(owner.delayInput.value(),'11','Apply must finish the edit instead of preserving a stale saved draft');
+  owner.close();
+});
+
+test('a live popup synchronizes pristine delay input but preserves edits and never accesses released state',async()=>{
+  const {owner,cx}=await ownerModel();
+  owner.initDelayInput(cx);
+  const {popup,popupCx}=presentation(owner,cx);
+  state.set('approvals.delay',7000);
+  owner.syncSettings();owner.changed(cx);
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(popup.delayInput.value(),'7','the popup update task must synchronize its own input');
+  popup.delayInput.set_value('9');popup.delayInput.emit('change',popupCx);
+  state.set('approvals.delay',11000);
+  owner.syncSettings();owner.changed(cx);
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(popup.delayInput.value(),'9','an owner update cannot replace an unfinished popup draft');
+  assert.equal(await popup.applyDelayInput(popupCx),true);
+  await new Promise(resolve=>setImmediate(resolve));
+  state.set('approvals.delay',13000);
+  owner.syncSettings();owner.changed(cx);
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(popup.delayInput.value(),'13','a saved popup draft follows later external changes');
+  globalThis.__approvalReleasedAccesses=0;
+  owner.changed(cx);popup.close();
+  state.set('approvals.delay',15000);owner.syncSettings();owner.changed(cx);
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(globalThis.__approvalReleasedAccesses,0);
+  owner.close();
+});
+
+for(const location of ['owner','popup']){
+  for(const draft of [null,'5']){
+    test(`immediate Apply in the ${location} respects an external delay and ${draft===null?'does not resave pristine text':'preserves an explicit user draft'}`,async()=>{
+      const {owner,controller,cx}=await ownerModel();
+      owner.initDelayInput(cx);
+      let view=owner,taskContext=cx,popup=null;
+      if(location==='popup'){
+        const opened=presentation(owner,cx);
+        view=opened.popup;taskContext=opened.popupCx;popup=opened.popup;
+      }
+      if(draft!==null){view.delayInput.set_value(draft);view.delayInput.emit('change',taskContext);}
+      state.set('approvals.delay',7000);
+      view.render(taskContext);
+      assert.equal(await view.applyDelayInput(taskContext),true);
+      const expected=draft===null?7000:5000;
+      assert.equal(state.get('approvals.delay'),expected,'Apply must use the latest saved duration unless the user actually edited this input');
+      assert.equal(controller.delayMs,expected);
+      assert.equal(view.delayInput.value(),String(expected/1000));
+      popup?.close();owner.close();
+    });
+  }
+}
+
+function renderedText(view) {
+  const previous=globalThis.__approvalElement,strings=[];
+  globalThis.__approvalElement=()=>{
+    let element;
+    element=new Proxy({}, {get:(_target,key)=>key==='then'?undefined:(...args)=>{
+      if(key==='child'&&typeof args[0]==='string')strings.push(args[0]);
+      return element;
+    }});
+    return element;
+  };
+  try{panel(view,context());}
+  finally{globalThis.__approvalElement=previous;}
+  return strings.join('\n');
+}
+
+for(const [status,message] of [['sent','The panel sent your reply.'],['changed','The request changed. The panel stopped the reply.'],['dispatching','Reply in progress. Cancellation is no longer possible.']]){
+  test(`${status} notice belongs only to the selected request identity`,async()=>{
+    const {owner,controller,row}=await ownerModel();
+    const second={...structuredClone(row),sessionKey:'other',episode:'other-episode',address:'t2',title:'Other fixture'};
+    controller.rows.push(second);
+    controller.status=status;
+    const view={...owner,compact:false,presentation:false,tab:'requests',controller};
+    controller.statusRequest={sessionKey:second.sessionKey,episode:second.episode,fingerprint:second.question.fingerprint};
+    assert.ok(!renderedText(view).includes(message),'a sibling reply cannot claim progress or success for the selected request');
+    controller.statusRequest={sessionKey:row.sessionKey,episode:row.episode,fingerprint:row.question.fingerprint};
+    assert.ok(renderedText(view).includes(message),'the current request still shows its own status');
+    controller.statusRequest={sessionKey:row.sessionKey,episode:'previous-episode',fingerprint:row.question.fingerprint};
+    assert.ok(!renderedText(view).includes(message),'a previous episode cannot supply the selected request status');
+    controller.statusRequest={sessionKey:row.sessionKey,episode:row.episode,fingerprint:'previous-command'};
+    assert.ok(!renderedText(view).includes(message),'a replaced command cannot supply the selected request status');
+    controller.error='Fixture connection error';
+    assert.ok(renderedText(view).includes('Fixture connection error'),'global errors remain visible even when the selected request differs');
+    owner.close();
+  });
+}
+
+test('cancelling the selected request explains that another agent still counts down',async()=>{
+  const {owner,controller,row}=await ownerModel();
+  const second={...structuredClone(row),sessionKey:'other',episode:'other-episode',address:'t2'};
+  controller.rows.push(second);
+  controller.status='cancelled';
+  controller.pending={sessionKey:second.sessionKey,episode:second.episode,fingerprint:second.question.fingerprint,deadline:3000};
+  const view={...owner,compact:false,presentation:false,tab:'requests',controller,choice:null};
+  assert.ok(renderedText(view).includes('Other requests continue to count down.'),'cancelling one request cannot imply that automatic approval stopped globally');
   owner.close();
 });
