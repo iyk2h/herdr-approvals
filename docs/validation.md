@@ -16,9 +16,14 @@ The automated checks cover these behaviors:
 Installation into a scratch Herdr home succeeds.
 Without `--update`, a second installation stops before it overwrites the mod.
 
-The test does not approve a real Codex command.
-It does not establish support for every Codex version.
-Tests mock actual Cockpit reply delivery.
+Live trials on 2026-11-17 used fictional agent terminals in the installed Herdr app.
+Both connections delivered one allow-once reply after a configured three-second delay.
+Cancellation trials used a ten-second delay. Both connections received no input after cancellation and the full delay.
+The compact widget also completed the native delivery trial.
+
+The fixtures do not execute a real Codex command.
+These trials do not establish support for every Codex version.
+Unit tests mock Cockpit delivery. The live trial used the actual Cockpit CLI.
 External input can still change the prompt after dispatch validation.
 
 Reproduction commands:
