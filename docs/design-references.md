@@ -22,7 +22,7 @@ identity. Runtime uses Herdr's own theme tokens and native GPUI controls.
   in a monospace block, while numbered answers remain readable on a narrow panel.
 - Only the final approval action uses the primary theme color. Cancel, session
   navigation, tabs, and preference controls use quieter theme treatments.
-- Automation settings expose enabled state, 3/5/10-second delay, all-local versus
+- Automation settings expose enabled state, preset or custom delay, all-local versus
   selected-session scope, and once versus remembered permission behavior.
 - Connection is selected separately and explains when an outstanding request
   prevents changing providers.

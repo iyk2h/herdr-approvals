@@ -8,7 +8,9 @@ import { ApprovalController } from '../mods/approvals/controller.js';
 
 assert.ok(process.env.HC_SESSION?.startsWith('ha-'), 'Refuse a non-isolated core');
 assert.ok(['/private/tmp/ha-','/tmp/ha-'].some(prefix=>process.env.XDG_STATE_HOME?.startsWith(prefix)), 'Refuse a non-scratch state directory');
-const [address, receipt] = process.argv.slice(2);
+const args = process.argv.slice(2);
+assert.ok(args.length >= 2 && args.length % 2 === 0, 'Provide address/receipt pairs');
+const fixtures = Array.from({length: args.length / 2}, (_, index) => ({address: args[index * 2], receipt: args[index * 2 + 1]}));
 const script = fileURLToPath(new URL('../mods/approvals/rpc.sh', import.meta.url));
 function rpc(method, params) {
   const raw = execFileSync('/bin/sh', [script, JSON.stringify({jsonrpc:'2.0',id:1,method,params})], {encoding:'utf8',timeout:15000});
@@ -24,23 +26,23 @@ const journalHost = {async read(name){return rpc('doc.get',{name});},async write
 const provider = new NativeProvider(host);
 let now=1000;
 const journal=new CasJournal(journalHost,'herdr.approvals.smoke');
-const controller=new ApprovalController({provider,journal,now:()=>now});
+const controller=new ApprovalController({provider,journal,now:()=>now,delayMs:7000});
 controller.setEnabled(true);
 // The fixture emits blocked immediately after its first frame; await that fact.
 for(let i=0;i<40;i++){
   await controller.refresh();
-  if(controller.pending)break;
+  if(controller.rows.length===fixtures.length)break;
   await new Promise(resolve=>setTimeout(resolve,50));
 }
-if (!controller.pending) console.error(JSON.stringify({controllerError:controller.error,list:JSON.parse((await host.hc(['ls','--json'])).stdout),terminal:JSON.parse((await host.hc(['get',address,'--json'])).stdout),screen:JSON.parse((await host.hc(['read',address,'--lines','0','--json'])).stdout)},null,2));
-assert.equal(controller.rows[0]?.address,address);
+assert.deepEqual(controller.rows.map(row=>row.address).sort(),fixtures.map(row=>row.address).sort());
 assert.ok(controller.pending,'Native parser must recognize the real core screen');
-now=3999;await controller.tick();assert.equal(existsSync(receipt),false);
-now=4000;await controller.tick();
-for(let i=0;i<40&&!existsSync(receipt);i++)await new Promise(resolve=>setTimeout(resolve,50));
-assert.deepEqual(JSON.parse(readFileSync(receipt,'utf8')),{choice:1,fixture:true});
-const attempts=await journal.entries();assert.ok(attempts.some(entry=>entry.status==='sent'));
+now=7999;await controller.tick();
+for(const {receipt} of fixtures)assert.equal(existsSync(receipt),false);
+now=8000;await controller.tick();
+for(let i=0;i<40&&fixtures.some(({receipt})=>!existsSync(receipt));i++)await new Promise(resolve=>setTimeout(resolve,50));
+for(const {receipt} of fixtures)assert.deepEqual(JSON.parse(readFileSync(receipt,'utf8')),{choice:1,fixture:true});
+const attempts=await journal.entries();assert.equal(attempts.filter(entry=>entry.status==='sent').length,fixtures.length);
 const reopened=new ApprovalController({provider,journal:new CasJournal(journalHost,'herdr.approvals.smoke'),now:()=>now});
 reopened.setEnabled(true);await reopened.refresh();await reopened.tick();
-assert.deepEqual(JSON.parse(readFileSync(receipt,'utf8')),{choice:1,fixture:true});
-console.log('PASS: actual isolated core screen -> parser -> controller -> durable CAS -> hc keys -> fixture receipt; no Cockpit');
+for(const {receipt} of fixtures)assert.deepEqual(JSON.parse(readFileSync(receipt,'utf8')),{choice:1,fixture:true});
+console.log('PASS: isolated core screens -> independent 7-second countdowns -> durable CAS -> exactly one native reply per fixture; no Cockpit');

@@ -1,5 +1,6 @@
 import { chooseApproval } from './policy.js';
 import { sha256 } from './digest.js';
+import { savedDelay, validDelay } from './settings.js';
 
 const clone = value => JSON.parse(JSON.stringify(value));
 const usable = row => row && typeof row.sessionKey === 'string' && row.sessionKey.length > 0
@@ -15,18 +16,20 @@ export class ApprovalController {
     this.provider = provider;
     this.journal = journal;
     this.now = now;
-    this.delayMs = Math.max(0, Number.isFinite(delayMs) ? delayMs : 3000);
+    this.delayMs = savedDelay(delayMs);
     this.mode = mode === 'remember' ? 'remember' : 'once';
     this.enabled = false;
     this.closed = false;
     this.rows = [];
     this.pending = null;
+    this.countdowns = new Map();
     this.selected = null;
     this.selectionSnapshot = null;
     this.busy = false;
     this.status = 'idle';
     this.error = null;
     this.generation = 0;
+    this.sessionGenerations = new Map();
     this.refreshSequence = 0;
     this.suppressed = new Set();
     this.cancelNext = new Set();
@@ -71,8 +74,18 @@ export class ApprovalController {
 
   invalidate() {
     this.generation += 1;
+    this.countdowns.clear();
     this.pending = null;
     this.pendingRow = null;
+  }
+
+  syncPending() {
+    let next = null;
+    for (const entry of this.countdowns.values()) {
+      if (!next || entry.pending.deadline < next.pending.deadline) next = entry;
+    }
+    this.pending = next?.pending ?? null;
+    this.pendingRow = next?.row ?? null;
   }
 
   discardObservations(error) {
@@ -101,22 +114,29 @@ export class ApprovalController {
   }
 
   setDelay(delayMs) {
-    if (![3000, 5000, 10000].includes(delayMs) || delayMs === this.delayMs) return;
+    if (!validDelay(delayMs) || delayMs === this.delayMs) return;
     this.invalidate();
     this.delayMs = delayMs;
     if (!this.busy) this.status = 'idle';
   }
 
   cancel(sessionKey) {
-    const row = sessionKey
-      ? this.rows.find(item => item.sessionKey === sessionKey) ?? (this.active?.sessionKey === sessionKey ? this.active : null)
-      : this.active ?? this.pendingRow;
-    if (usable(row)) {
-      this.suppressed.add(this.key(row));
+    const rows = sessionKey
+      ? [this.active?.sessionKey === sessionKey ? this.active : this.rows.find(item => item.sessionKey === sessionKey)]
+      : [...this.countdowns.values()].map(entry => entry.row).concat(this.active ?? []);
+    const requests = new Map(rows.filter(usable).map(row => [this.key(row), row]));
+    for (const [key, row] of requests) {
+      this.suppressed.add(key);
       this.persistCancellation(row);
     }
-    else if (sessionKey) this.cancelNext.add(sessionKey);
-    this.invalidate();
+    if (sessionKey) {
+      if (!requests.size) this.cancelNext.add(sessionKey);
+      this.sessionGenerations.set(sessionKey, (this.sessionGenerations.get(sessionKey) ?? 0) + 1);
+      for (const [key, entry] of this.countdowns) {
+        if (entry.row.sessionKey === sessionKey) this.countdowns.delete(key);
+      }
+      this.syncPending();
+    } else this.invalidate();
     if (!this.busy) this.status = 'cancelled';
   }
 
@@ -161,28 +181,33 @@ export class ApprovalController {
       for (const row of rows) {
         if (this.cancelNext.has(row.sessionKey)) {
           this.suppressed.add(this.key(row));
+          this.persistCancellation(row);
           this.cancelNext.delete(row.sessionKey);
         }
       }
       if (this.selected && !rows.some(row => row.sessionKey === this.selected.sessionKey
         && row.episode === this.selected.episode && row.question.fingerprint === this.selected.fingerprint)) this.selected = null;
-      if (this.pendingRow && (!rows.some(row => sameRequest(this.pendingRow, row) && row.autoAllowed !== false)
-        || claimed.has(this.key(this.pendingRow)) || cancelled.has(this.key(this.pendingRow))
-        || this.quarantined(this.pendingRow, entries))) {
-        this.pending = null;
-        this.pendingRow = null;
+      const eligible = new Map(rows.filter(row => row.autoAllowed !== false && !claimed.has(this.key(row)) && !cancelled.has(this.key(row))
+        && !this.suppressed.has(this.key(row)) && !this.quarantined(row, entries) && chooseApproval(row.question, this.mode) !== null)
+        .map(row => [this.key(row), row]));
+      for (const key of this.countdowns.keys()) {
+        if (!eligible.has(key)) this.countdowns.delete(key);
       }
-      if (!this.enabled || this.busy || this.pending) return;
-      const row = rows.find(item => item.autoAllowed !== false && !claimed.has(this.key(item)) && !cancelled.has(this.key(item))
-        && !this.suppressed.has(this.key(item)) && !this.quarantined(item, entries) && chooseApproval(item.question, this.mode) !== null);
-      if (!row) {
+      if (this.enabled) for (const [key, row] of eligible) {
+        if (this.countdowns.has(key) || (this.active && this.key(this.active) === key)) continue;
+        const choice = chooseApproval(row.question, this.mode);
+        this.countdowns.set(key, { row: clone(row), pending: {
+          sessionKey: row.sessionKey, episode: row.episode, fingerprint: row.question.fingerprint, choice,
+          deadline: this.now() + this.delayMs,
+        } });
+      }
+      this.syncPending();
+      if (this.busy) return;
+      if (!this.pending) {
         if (rows.some(item => this.quarantined(item, entries))) this.status = 'unknown';
         else if (this.status === 'countdown') this.status = 'idle';
         return;
       }
-      const choice = chooseApproval(row.question, this.mode);
-      this.pendingRow = clone(row);
-      this.pending = { sessionKey: row.sessionKey, episode: row.episode, fingerprint: row.question.fingerprint, choice, deadline: this.now() + this.delayMs };
       this.status = 'countdown';
       this.error = null;
     } catch (error) {
@@ -192,15 +217,23 @@ export class ApprovalController {
   }
 
   async tick() {
-    try { await this.flush(); } catch (error) {
-      this.error = String(error?.message ?? error);
-      this.status = 'error';
-      return { status: 'error' };
+    if (this.closed || !this.enabled || this.busy || this.ticking) return;
+    this.ticking = true;
+    try {
+      try { await this.flush(); } catch (error) {
+        this.discardObservations(error);
+        return { status: 'error' };
+      }
+      let result;
+      while (!this.closed && this.enabled && !this.busy && this.pending && this.now() >= this.pending.deadline) {
+        const row = this.pendingRow, choice = this.pending.choice;
+        if (!row) break;
+        result = await this.dispatch(row, choice, 'auto');
+      }
+      return result;
+    } finally {
+      this.ticking = false;
     }
-    if (this.closed || !this.enabled || this.busy || !this.pending || this.now() < this.pending.deadline) return;
-    const row = this.pendingRow;
-    const choice = this.pending.choice;
-    return this.dispatch(row, choice, 'auto');
   }
 
   async submit(sessionKey, choice, expected) {
@@ -222,8 +255,10 @@ export class ApprovalController {
   async dispatch(row, choice, source) {
     if (this.closed || this.busy || !usable(row)) return { status: 'busy' };
     const generation = this.generation;
+    const sessionGeneration = this.sessionGenerations.get(row.sessionKey) ?? 0;
     let observation = row;
     const allowed = () => !this.closed && generation === this.generation
+      && sessionGeneration === (this.sessionGenerations.get(row.sessionKey) ?? 0)
       && (source !== 'auto' || (this.enabled && observation?.autoAllowed !== false));
     const key = this.key(row);
     const cancelled = entries => source === 'auto'
@@ -232,8 +267,8 @@ export class ApprovalController {
     let dispatched = false;
     this.busy = true;
     this.active = row;
-    this.pending = null;
-    this.pendingRow = null;
+    this.countdowns.delete(key);
+    this.syncPending();
     this.status = 'validating';
     this.error = null;
     try {

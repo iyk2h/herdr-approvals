@@ -15,7 +15,8 @@ Settings and request details open in popups. The strip remains the only input co
 
 Select a reply. Then press Enter.
 Press Esc to cancel automatic approval for the current request.
-Selection stops the countdown. Cancellation does not reject the command.
+Selection stops that request's countdown. Other agents continue counting down.
+Cancellation does not reject the command. The global cancel command stops all current countdowns.
 
 ## Automatic approval
 

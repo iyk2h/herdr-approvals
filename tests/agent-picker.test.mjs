@@ -10,6 +10,10 @@ const settings = new Map();
 let io = 0;
 let checking = false;
 globalThis.__pickerElement = () => new Proxy({}, {get: (_target, key) => key === 'then' ? undefined : () => globalThis.__pickerElement()});
+globalThis.__pickerInput = (options = {}) => {
+  let value = options.value ?? '';
+  return {value: () => value, set_value: next => { value = next; }, on: () => true, focus() {}, release: () => true};
+};
 globalThis.__pickerHost = {
   checking: () => checking, shared: key => settings.get(key), setShared: (key, value) => settings.set(key, value),
   openOverlay: () => { io += 1; throw new Error('Unexpected popup'); }, closeOverlay: () => { io += 1; },
@@ -22,7 +26,7 @@ globalThis.__pickerHost = {
 };
 const definitions = {
   'gpui-kit': 'export class View {} export const div=()=>globalThis.__pickerElement();',
-  'gpui-base': 'export const Button={new:()=>globalThis.__pickerElement()};export const h_flex=()=>globalThis.__pickerElement();export const v_flex=h_flex;',
+  'gpui-base': 'export const Button={new:()=>globalThis.__pickerElement()};export const InputState={new:options=>globalThis.__pickerInput(options)};export const Input={new:()=>globalThis.__pickerElement()};export const NumberInput=Input;export const h_flex=()=>globalThis.__pickerElement();export const v_flex=h_flex;',
   herdr: Object.keys(globalThis.__pickerHost).map(name => `export const ${name}=(...args)=>globalThis.__pickerHost.${name}(...args);`).join('\n'),
 };
 registerHooks({resolve(specifier, context, next) {

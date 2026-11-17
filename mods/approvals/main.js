@@ -1,4 +1,5 @@
 import { View } from 'gpui-kit';
+import { InputState } from 'gpui-base';
 import { checking, shared, setShared, nextCommand, run, props, agents, openOverlay, closeOverlay } from 'herdr';
 import { ApprovalController } from './controller.js';
 import { MemoryJournal, CasJournal } from './state.js';
@@ -10,6 +11,7 @@ import { host, journalHost } from './host.js';
 import { cockpitRequest } from './cockpit-client.js';
 import { panel } from './ui.js';
 import { sha256 } from './digest.js';
+import { savedDelay, validDelay, parseDelaySeconds } from './settings.js';
 import { registerOwner, presentation, newPresentation, revokePresentation, relay, publish, removeOwner } from './presentation-registry.js';
 
 const PREVIEW = 'Would you like to run the following command?\n\n  $ pnpm test\n\n❯ 1. Yes, proceed (y)\n  2. Yes, and don\'t ask again for commands that start with `pnpm test`\n  3. No, and tell Codex what to do differently (esc)\n\nPress enter to confirm or esc to cancel';
@@ -27,7 +29,8 @@ export default class Approvals extends View {
     this.focus = cx.focus_handle();
     this.mode = shared('approvals.mode') === 'remember' ? 'remember' : 'once';
     this.connection = shared('approvals.provider') === 'cockpit' ? 'cockpit' : 'native';
-    this.delayMs = [3000, 5000, 10000].includes(shared('approvals.delay')) ? shared('approvals.delay') : 3000;
+    this.delayMs = savedDelay(shared('approvals.delay'));
+    this.initDelayInput(cx);
     this.scope = shared('approvals.scope') === 'selected' ? 'selected' : 'all';
     this.selectedSessions = Array.isArray(shared('approvals.sessions')) ? shared('approvals.sessions').filter(key => typeof key === 'string').slice(0, 40) : [];
     this.choice = null; this.selectedKey = null; this.busy = false; this.closed = false;
@@ -52,6 +55,8 @@ export default class Approvals extends View {
     this.overlay = p.overlay; this.closed = false; this.focus = cx.focus_handle();
     const entry = presentation(this.ownerId, this.dialogToken);
     this.owner = entry?.owner;
+    this.delayMs = this.owner?.delayMs ?? savedDelay(shared('approvals.delay'));
+    this.initDelayInput(cx);
     this.preview = checking() || Boolean(p.preview) || !this.owner || this.owner.preview;
     if (this.preview) return;
     this.focus.focus();
@@ -64,6 +69,25 @@ export default class Approvals extends View {
     });
   }
   changed(cx) { if (!this.presentation) publish(this.ownerId); cx.notify(); }
+  initDelayInput(_cx) {
+    if (this.delayInput) return;
+    this.delayInput = InputState.new({ value: String(savedDelay(this.delayMs) / 1000) });
+    this.delayError = null;
+    this.delayInput.on('change', (_event, cx) => { this.delayError = null; cx.notify(); });
+    this.delayInput.on('submit', (_event, cx) => this.applyDelayInput(cx));
+  }
+  applyDelayInput(cx) {
+    if (this.preview || this.closed) return false;
+    const ms = parseDelaySeconds(this.delayInput?.value());
+    if (ms === null) {
+      this.delayError = 'Enter a whole number from 1 to 3,600.';
+      cx.notify();
+      return false;
+    }
+    this.delayError = null;
+    cx.notify();
+    return this.presentation ? this.relay({ action: 'delay', value: ms }) : this.setDelay(ms, cx);
+  }
   openPopup(tab, cx) {
     if (this.preview || this.closed || checking()) return;
     if (!this.presentationEntry) {
@@ -95,7 +119,7 @@ export default class Approvals extends View {
     const { action, value } = packet;
     if (action === 'tab' && ['settings', 'requests'].includes(value)) { entry.dialog.tab = value; return true; }
     if (entry.dialog.tab === 'settings') {
-      if (action === 'delay' && [3000, 5000, 10000].includes(value)) this.setDelay(value, cx);
+      if (action === 'delay' && validDelay(value)) this.setDelay(value, cx);
       else if (action === 'mode' && ['once', 'remember'].includes(value)) this.setMode(value, cx);
       else if (action === 'scope' && ['all', 'selected'].includes(value)) this.setScope(value, cx);
       else if (action === 'session' && this.sessionCatalog.some(row => row.sessionKey === value)) this.toggleSession(value, cx);
@@ -108,7 +132,7 @@ export default class Approvals extends View {
     const row = this.controller.rows.find(row => row.sessionKey === packet.sessionKey);
     if (!row || row.episode !== packet.episode || sha256(row.question.fingerprint) !== packet.digest) return false;
     if (action === 'pick') this.pick(row, cx);
-    else if (action === 'cancel') { this.controller.cancel(row.sessionKey); this.changed(cx); }
+    else if (action === 'cancel') { this.controller.cancel(row.sessionKey); this.schedule(cx); this.changed(cx); }
     else if (action === 'inspect') this.inspect(row, cx);
     else if (['choose', 'submit'].includes(action) && !this.busy && !row.quarantined
       && row.question.choices.some(choice => choice.n === packet.choice && !choice.free)) {
@@ -133,6 +157,7 @@ export default class Approvals extends View {
     const pendingRow = owner.controller.rows.find(item => item.sessionKey === owner.controller.pending?.sessionKey);
     const request = (action, row, extra = {}) => this.relay({ action, ...snapshots.get(row), ...extra });
     return { ...owner, controller: owner.controller, presentation: true, compact: false, tab: this.tab, focus: this.focus,
+      delayInput: this.delayInput, delayError: this.delayError, applyDelayInput: cx => this.applyDelayInput(cx),
       preview: this.preview, key: (event, cx) => this.key(event, cx), dismiss: () => this.dismiss(),
       setTab: (tab, cx) => { this.tab = tab === 'settings' ? 'settings' : 'requests'; this.relay({ action: 'tab', value: this.tab }); cx.notify(); },
       toggle: () => this.relay({ action: 'toggle', value: !enabled }),
@@ -155,12 +180,16 @@ export default class Approvals extends View {
     this.controller.setEnabled(!this.preview && shared('approvals.enabled') === true);
   }
   schedule(cx) {
+    if (this.closed || this.preview || this.busy || this.controller.busy) return;
     const pending = this.controller.pending;
     if (!pending || pending === this.scheduled) return;
     this.scheduled = pending;
     cx.timer.after(Math.max(0, pending.deadline - Date.now()), cx => {
+      if (this.scheduled === pending) this.scheduled = null;
       this.syncSettings();
-      if (this.closed || this.preview || this.controller.pending !== pending) return;
+      if (this.closed || this.preview) return;
+      if (this.controller.pending !== pending) { this.schedule(cx); return; }
+      if (this.busy || this.controller.busy) return;
       cx.spawn(async cx => { this.busy = true; this.changed(cx); try { await this.controller.tick(); } catch (e) { this.error = String(e.message || e); } finally { this.busy = false; this.updateCompactSize(cx); this.changed(cx); this.schedule(cx); } });
     });
   }
@@ -197,7 +226,7 @@ export default class Approvals extends View {
     this.controller.setEnabled(shared('approvals.enabled') === true);
     const mode = shared('approvals.mode') === 'remember' ? 'remember' : 'once';
     if (mode !== this.mode) { this.mode = mode; this.controller.setMode(mode); }
-    const delay = [3000, 5000, 10000].includes(shared('approvals.delay')) ? shared('approvals.delay') : 3000;
+    const delay = savedDelay(shared('approvals.delay'));
     if (delay !== this.delayMs) { this.delayMs = delay; this.controller.setDelay(delay); }
     const scope = shared('approvals.scope') === 'selected' ? 'selected' : 'all';
     const selected = Array.isArray(shared('approvals.sessions')) ? shared('approvals.sessions').filter(key => typeof key === 'string').slice(0, 40) : [];
@@ -218,7 +247,7 @@ export default class Approvals extends View {
     else this.tab = tab;
     this.updateCompactSize(cx); this.changed(cx);
   }
-  setDelay(ms, cx) { if (this.preview || ![3000, 5000, 10000].includes(ms)) return; setShared('approvals.delay', ms); this.syncSettings(); this.refresh(cx); this.changed(cx); }
+  setDelay(ms, cx) { if (this.preview || this.closed || !validDelay(ms)) return false; setShared('approvals.delay', ms); this.syncSettings(); this.refresh(cx); this.changed(cx); return true; }
   setScope(scope, cx) { if (this.preview) return; setShared('approvals.scope', scope === 'selected' ? 'selected' : 'all'); this.syncSettings(); this.refresh(cx); this.changed(cx); }
   toggleSession(key, cx) {
     if (this.preview || !this.sessionCatalog.some(session => session.sessionKey === key)) return;
@@ -230,13 +259,14 @@ export default class Approvals extends View {
     setShared('approvals.sessions', []); this.controller.invalidate(); this.syncSettings(); this.refresh(cx); this.changed(cx);
   }
   setMode(mode, cx) { if (this.preview) return; setShared('approvals.mode', mode === 'remember' ? 'remember' : 'once'); this.syncSettings(); this.refresh(cx); this.changed(cx); }
-  pick(row, cx) { this.controller.cancel(row.sessionKey); this.selectedKey = row.sessionKey; this.choice = null; this.selection = null; this.changed(cx); }
+  pick(row, cx) { this.controller.cancel(row.sessionKey); this.selectedKey = row.sessionKey; this.choice = null; this.selection = null; this.schedule(cx); this.changed(cx); }
   review(row, cx) {
     if (this.preview || !row) return;
     this.controller.cancel(row.sessionKey); this.selectedKey = row.sessionKey; this.choice = null; this.selection = null;
+    this.schedule(cx);
     this.setTab('requests', cx);
   }
-  choose(row, choice, cx) { if (this.preview || row.quarantined || !row.question.choices.some(item => item.n === choice && !item.free)) return; this.selectedKey = row.sessionKey; this.choice = choice; this.selection = { episode: row.episode, fingerprint: row.question.fingerprint }; this.controller.select(row.sessionKey, choice); this.changed(cx); }
+  choose(row, choice, cx) { if (this.preview || row.quarantined || !row.question.choices.some(item => item.n === choice && !item.free)) return; this.selectedKey = row.sessionKey; this.choice = choice; this.selection = { episode: row.episode, fingerprint: row.question.fingerprint }; this.controller.select(row.sessionKey, choice); this.schedule(cx); this.changed(cx); }
   cancel(cx) { this.controller.cancel(); this.updateCompactSize(cx); this.changed(cx); }
   toggle(cx) { if (this.preview) return; const enabled = !this.controller.enabled; setShared('approvals.enabled', enabled); this.controller.setEnabled(enabled); this.updateCompactSize(cx); this.refresh(cx); this.changed(cx); }
   toggleMode(cx) { if (this.preview || this.busy) return; this.mode = this.mode === 'once' ? 'remember' : 'once'; setShared('approvals.mode', this.mode); this.controller.setMode(this.mode); this.refresh(cx); this.changed(cx); }
@@ -248,9 +278,9 @@ export default class Approvals extends View {
   submit(row, cx) {
     if (this.preview || this.busy || this.choice === null) return;
     const choice = this.choice, selection = this.selection;
-    cx.spawn(async cx => { this.busy = true; this.changed(cx); try { await this.controller.submit(row.sessionKey, choice, selection); } catch (e) { this.error = String(e.message || e); } finally { this.busy = false; this.choice = null; this.selection = null; this.changed(cx); } });
+    cx.spawn(async cx => { this.busy = true; this.changed(cx); try { await this.controller.submit(row.sessionKey, choice, selection); } catch (e) { this.error = String(e.message || e); } finally { this.busy = false; this.choice = null; this.selection = null; this.changed(cx); this.schedule(cx); } });
   }
-  inspect(row, cx) { this.controller.cancel(row.sessionKey); run('agent.focus', { terminal: row.address }); this.changed(cx); }
+  inspect(row, cx) { this.controller.cancel(row.sessionKey); this.schedule(cx); run('agent.focus', { terminal: row.address }); this.changed(cx); }
   key(event, cx) {
     const key = event.keystroke || event.key;
     if (this.presentation) {
@@ -290,6 +320,7 @@ export default class Approvals extends View {
   close() {
     if (this.closed) return;
     this.closed = true;
+    this.delayInput?.release();
     if (this.presentation) { revokePresentation(this.ownerId, this.dialogToken); return; }
     removeOwner(this.ownerId);
     if (this.popupId) closeOverlay(this.popupId);

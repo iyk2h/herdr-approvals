@@ -12,7 +12,7 @@ Automatic approval is off by default.
 | Setting | Behavior |
 | --- | --- |
 | Auto-approve | Sends the automatic reply after the delay. |
-| Delay | Gives you 3, 5, or 10 seconds to examine the command or cancel. |
+| Delay | Use 3, 5, or 10 seconds, or enter a whole number from 1 to 3,600 seconds and select Apply. |
 | Agents | Includes all supported local Codex agents, or only selected agents. |
 | Automatic reply | Allows one command, or saves a command rule that Codex offers. |
 | Connection | Uses Herdr directly, or an existing local Cockpit installation. |
@@ -73,6 +73,12 @@ For a compact widget, add this block to a personal layout:
 The strip stays 40px high in all states. **Settings** opens a popup.
 Select the request count to read the command and replies. Review pauses automatic approval for that request.
 Closing settings preserves the automatic timer.
+
+Each agent has its own countdown. Requests found together count down together.
+Replies use one dispatch path when due; they do not each wait another full delay.
+Review or cancellation for one request leaves the other countdowns running.
+The global cancel command stops all current automatic requests.
+Changing the delay starts fresh countdowns with the new duration.
 
 ## Cockpit and delivery
 

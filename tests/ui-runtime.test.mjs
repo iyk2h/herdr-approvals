@@ -9,6 +9,11 @@ import { sha256 } from '../mods/approvals/digest.js';
 
 const state=new Map();const commands=[];const overlays=[];const closedOverlays=[];let io=0;let check=true;
 globalThis.__approvalElement=()=>new Proxy({}, {get:(_target,key)=>key==='then'?undefined:(...args)=>globalThis.__approvalElement()});
+globalThis.__approvalInput=(options={})=>{
+  let value=options.value??'';const events=new Map();
+  return {value:()=>value,set_value:next=>{value=next;},on:(name,callback)=>{events.set(name,callback);return true;},
+    emit:(name,cx)=>events.get(name)?.({},cx),focus(){},release(){return true;}};
+};
 globalThis.__approvalHost={
   checking:()=>check,shared:key=>state.get(key),setShared:(key,value)=>state.set(key,value),
   agents:()=>[],props:()=>({}),theme:()=>({background:'#101010',foreground:'#ffffff',muted:'#aaaaaa',raised:'#202020',surface:'#202020',hover:'#303030'}),
@@ -18,7 +23,7 @@ globalThis.__approvalHost={
 };
 const definitions={
   'gpui-kit':'export class View {} export const div=()=>globalThis.__approvalElement();',
-  'gpui-base':'export const Button={new:()=>globalThis.__approvalElement()};export const h_flex=()=>globalThis.__approvalElement();export const v_flex=h_flex;',
+  'gpui-base':'export const Button={new:()=>globalThis.__approvalElement()};export const InputState={new:options=>globalThis.__approvalInput(options)};export const Input={new:()=>globalThis.__approvalElement()};export const NumberInput=Input;export const h_flex=()=>globalThis.__approvalElement();export const v_flex=h_flex;',
   herdr:Object.keys(globalThis.__approvalHost).map(name=>`export const ${name}=(...args)=>globalThis.__approvalHost.${name}(...args);`).join('\n'),
 };
 registerHooks({resolve(specifier,context,next){return definitions[specifier]?{url:`data:text/javascript,${encodeURIComponent(definitions[specifier])}`,shortCircuit:true}:next(specifier,context);}});
@@ -261,4 +266,141 @@ test('the thin owner never submits hidden manual choices while the regular reque
   const regular=Object.assign(Object.create(Approvals.prototype),{compact:false,tab:'settings',controller:{rows:[row]},selectedKey:'fixture',choice:1,submit(){sends++;}});
   regular.command('approve',context());assert.equal(sends,0);
   regular.tab='requests';regular.command('approve',context());assert.equal(sends,1);
+});
+
+test('custom whole-second delays persist and update the owner without accepting invalid settings',()=>{
+  check=false;state.clear();state.set('approvals.enabled',true);
+  const controller=new ApprovalController({provider:{id:'native',list:async()=>[]},journal:new MemoryJournal()});
+  const view=Object.assign(Object.create(Approvals.prototype),{controller,preview:false,closed:false,mode:'once',
+    delayMs:3000,scope:'all',selectedSessions:[],refresh(){}});
+  for(const ms of [1000,7000,3600000,3000,5000,10000]){
+    view.setDelay(ms,context());
+    assert.equal(state.get('approvals.delay'),ms);
+    assert.equal(view.delayMs,ms);
+    assert.equal(controller.delayMs,ms);
+  }
+  for(const invalid of ['',null,undefined,NaN,Infinity,-1000,0,999,1500,3600001,3601000,'7000']){
+    const before=state.get('approvals.delay');
+    view.setDelay(invalid,context());
+    assert.equal(state.get('approvals.delay'),before,`invalid ${String(invalid)} must not persist`);
+    assert.equal(controller.delayMs,before);
+  }
+});
+
+test('a custom delay survives a fresh view and shared setting synchronization',()=>{
+  check=true;state.clear();state.set('approvals.delay',7000);
+  const view=new Approvals(),cx=context();
+  view.init({},cx);
+  assert.equal(view.delayMs,7000);
+  assert.equal(view.controller.delayMs,7000);
+  view.preview=false;view.closed=false;
+  state.set('approvals.delay',12000);
+  view.syncSettings();
+  assert.equal(view.delayMs,12000);
+  assert.equal(view.controller.delayMs,12000);
+  view.close();
+});
+
+test('popup relay accepts custom delays and rejects invalid values without changing the owner',async()=>{
+  const {owner,controller,cx}=await ownerModel();
+  const {popup}=presentation(owner,cx);
+  assert.equal(await popup.relay({action:'delay',value:7000}),true);
+  assert.equal(state.get('approvals.delay'),7000);
+  assert.equal(controller.delayMs,7000);
+  for(const invalid of [0,1500,3601000,NaN,'7000']){
+    assert.equal(await popup.relay({action:'delay',value:invalid}),false);
+    assert.equal(state.get('approvals.delay'),7000);
+    assert.equal(controller.delayMs,7000);
+  }
+  popup.close();owner.close();
+});
+
+test('reviewing one agent in a popup preserves another agent countdown',async()=>{
+  const {owner,controller,cx,row}=await ownerModel();
+  const second={...row,sessionKey:'second-fixture',address:'t2'};
+  controller.provider.list=async()=>[row,second];
+  controller.provider.readQuestion=async request=>request.sessionKey===row.sessionKey?row:second;
+  await controller.refresh();
+  owner.review(row,cx);
+  assert.equal(controller.pending.sessionKey,second.sessionKey);
+  assert.equal(controller.pending.deadline,3000);
+  assert.equal(overlays.at(-1).props.tab,'requests');
+  owner.close();
+});
+
+test('editing a delay draft does not save until Apply and invalid text leaves the saved delay unchanged',async()=>{
+  const {owner,controller,cx}=await ownerModel();
+  owner.initDelayInput(cx);
+  owner.delayInput.set_value('7');
+  owner.delayInput.emit('change',cx);
+  assert.equal(state.has('approvals.delay'),false,'typing cannot change the setting');
+  assert.equal(controller.delayMs,3000);
+  assert.equal(await owner.applyDelayInput(cx),true);
+  assert.equal(state.get('approvals.delay'),7000);
+  assert.equal(controller.delayMs,7000);
+  for(const text of ['', ' ', 'NaN', '-1', '0', '1.5', '1e2', '3601']){
+    owner.delayInput.set_value(text);
+    owner.delayInput.emit('change',cx);
+    assert.equal(await owner.applyDelayInput(cx),false,`invalid text ${JSON.stringify(text)} must be refused`);
+    assert.equal(state.get('approvals.delay'),7000);
+    assert.equal(controller.delayMs,7000);
+  }
+  owner.preview=true;
+  owner.delayInput.set_value('9');
+  assert.equal(await owner.applyDelayInput(cx),false,'preview cannot save a valid draft');
+  assert.equal(state.get('approvals.delay'),7000);
+  owner.close();
+});
+
+test('the custom delay input accepts both whole-second limits and Enter uses the same Apply action',async()=>{
+  const {owner,controller,cx}=await ownerModel();
+  owner.initDelayInput(cx);
+  for(const [text,ms] of [['1',1000],['3600',3600000]]){
+    owner.delayInput.set_value(text);
+    assert.equal(await owner.applyDelayInput(cx),true);
+    assert.equal(state.get('approvals.delay'),ms);
+    assert.equal(controller.delayMs,ms);
+  }
+  owner.delayInput.set_value('7');
+  await owner.delayInput.emit('submit',cx);
+  assert.equal(state.get('approvals.delay'),7000);
+  assert.equal(controller.delayMs,7000);
+  owner.delayInput.set_value('1.5');
+  await owner.delayInput.emit('submit',cx);
+  assert.equal(state.get('approvals.delay'),7000,'Enter cannot bypass input validation');
+  owner.close();
+});
+
+test('popup delay drafts stay local and Apply or Enter reaches only the current input owner mailbox',async()=>{
+  const {owner,controller,cx}=await ownerModel();
+  owner.initDelayInput(cx);
+  owner.delayInput.set_value('9');
+  const {popup,popupCx}=presentation(owner,cx);
+  assert.ok(popup.delayInput,'a settings popup owns retained input state');
+  assert.notEqual(popup.delayInput,owner.delayInput);
+  popup.delayInput.set_value('7');
+  popup.delayInput.emit('change',popupCx);
+  assert.equal(owner.delayInput.value(),'9','a popup draft cannot edit another view input');
+  assert.equal(state.has('approvals.delay'),false);
+  const apply=owner.setDelay.bind(owner);
+  let ownerActions=0;
+  owner.setDelay=(value,taskContext)=>{
+    ownerActions++;
+    assert.equal(taskContext,cx,'the original owner context applies the setting');
+    return apply(value,taskContext);
+  };
+  assert.equal(await popup.applyDelayInput(popupCx),true);
+  assert.equal(ownerActions,1);
+  assert.equal(state.get('approvals.delay'),7000);
+  assert.equal(controller.delayMs,7000);
+  popup.delayInput.set_value('11');
+  await popup.delayInput.emit('submit',popupCx);
+  assert.equal(ownerActions,2);
+  assert.equal(state.get('approvals.delay'),11000);
+  popup.delayInput.set_value('12');
+  popup.close();
+  assert.equal(await popup.applyDelayInput(popupCx),false);
+  assert.equal(ownerActions,2,'closed popup capabilities cannot mutate settings');
+  assert.equal(state.get('approvals.delay'),11000);
+  owner.close();
 });

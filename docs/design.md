@@ -20,6 +20,10 @@ Only exact agent aliases and recognized permission menus qualify for input.
 Authentication prompts, text questions, and missing process metadata do not qualify.
 
 The controller handles manual and automatic replies through one dispatch path.
+Each request has an independent deadline. Due requests share one serial dispatcher.
+Cancelling one session invalidates only that session's automatic request.
+Global cancellation and policy changes invalidate all affected deadlines and in-flight validation.
+Delay values use whole seconds from 1 to 3,600. Invalid values do not change saved settings.
 It saves a durable claim before input. The claim uses compare-and-set writes in a core document.
 A cancellation record stops automatic input. An explicit manual reply remains possible before dispatch.
 

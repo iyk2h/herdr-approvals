@@ -1,5 +1,5 @@
 import { div } from 'gpui-kit';
-import { Button, v_flex, h_flex } from 'gpui-base';
+import { Button, Input, v_flex, h_flex } from 'gpui-base';
 import { theme } from 'herdr';
 
 export function button(id, label, onClick, {
@@ -64,9 +64,16 @@ function settings(view) {
       .child(label('Auto-approve')).child(description('Allow supported requests after the delay.')))
     .child(autoToggle('approvals-auto', view)));
   body.child(separator());
-  body.child(setting('Delay', 'Time to examine the command or cancel.',
-    segmented('approvals-delay', [{ value: 3000, label: '3 sec' }, { value: 5000, label: '5 sec' }, { value: 10000, label: '10 sec' }],
-      view.delayMs ?? 3000, (value, cx) => view.setDelay(value, cx), disabled)));
+  const delay = v_flex().min_w(0).gap(8)
+    .child(segmented('approvals-delay', [{ value: 3000, label: '3 sec' }, { value: 5000, label: '5 sec' }, { value: 10000, label: '10 sec' }],
+      view.delayMs ?? 3000, (value, cx) => { view.delayInput?.set_value(String(value / 1000)); view.setDelay(value, cx); }, disabled));
+  if (view.delayInput) delay.child(h_flex().min_w(0).items_center().gap(8)
+    .child(Input.new(view.delayInput).id('approvals-custom-delay').w(96).h(32).px(8).rounded(6)
+      .border(1).border_color(t.input || t.border).bg(t.raised || t.surface).text_color(t.foreground).text_size(13).disabled(disabled))
+    .child(description('sec'))
+    .child(button('approvals-apply-delay', 'Apply', cx => view.applyDelayInput(cx), { compact: true, disabled, variant: 'secondary' })));
+  delay.child(description(view.delayError || '1–3,600 sec. Press Enter or select Apply.'));
+  body.child(setting('Delay', 'Time to examine the command or cancel.', delay));
   body.child(setting('Agents', view.scope === 'selected'
     ? 'Only selected Codex agents in Herdr.'
     : 'All local Codex agents in Herdr, including new agents.',
@@ -181,8 +188,8 @@ function compactPanel(view) {
     .track_focus(view.focus).on_key_down((event, cx) => { if (view.key(event, cx)) cx.stop_propagation(); })
     .child(div().flex_1().min_w(0).truncate().font_semibold().text_size(13).child('Approvals'))
     .child(autoToggle('approvals-compact-auto', view))
-    .child(button('approvals-compact-requests', status, cx => row ? view.review(row, cx) : view.setTab('requests', cx),
-      { compact: true, align: 'center', disabled: view.preview || view.busy || controller.busy }).w(78).flex_none().py(3))
+    .child(button('approvals-compact-requests', div().whitespace_nowrap().text_size(12).child(status), cx => row ? view.review(row, cx) : view.setTab('requests', cx),
+      { compact: true, align: 'center', disabled: view.preview || view.busy || controller.busy }).w(78).flex_none().px(4).py(3))
     .child(button('approvals-compact-settings', div().whitespace_nowrap().child('Settings'), cx => view.setTab('settings', cx),
       { compact: true, align: 'center', disabled: view.preview }).w(64).flex_none().px(4).py(3));
 }

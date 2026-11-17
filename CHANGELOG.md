@@ -2,8 +2,8 @@
 
 ## Unreleased
 
+- Set a custom delay from 1 to 3,600 seconds and count down requests independently.
 - Keep the compact strip at 40px and show settings and request details in popups.
-- Add a compact widget with inline settings and request review.
 - Prevent hidden selections from accepting approval commands in settings.
 - Select working and idle Codex agents before a permission request arrives.
 - Clear stored agent selections, including inactive processes.
