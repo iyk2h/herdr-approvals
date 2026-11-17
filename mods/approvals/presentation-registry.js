@@ -1,5 +1,11 @@
-const owners = new Map();
-let sequence = 0;
+const REGISTRY = '__herdrApprovalsPresentationsV1';
+
+// A folder rescan can evaluate new code while an existing copy stays mounted.
+// Initialize only when an owner registers, so failed module loads have no effects.
+function registry(create = false) {
+  if (!globalThis[REGISTRY] && create) globalThis[REGISTRY] = { owners: new Map(), sequence: 0 };
+  return globalThis[REGISTRY];
+}
 
 function queue(coalesce = false) {
   let values = [], waiter = null, closed = false;
@@ -26,23 +32,28 @@ function queue(coalesce = false) {
 }
 
 // Keep capabilities and in-memory messages here; host contexts stay in their own tasks.
-export function registerOwner(owner) {
-  const id = `approvals-owner-${++sequence}`;
-  const entry = { owner, actions: queue(), dialog: null };
-  owners.set(id, entry);
+export function registerOwner(owner, slot = null) {
+  const state = registry(true);
+  if (slot) {
+    for (const [id, entry] of state.owners) if (entry.slot === slot) removeOwner(id);
+  }
+  const id = `approvals-owner-${++state.sequence}`;
+  const entry = { owner, slot, actions: queue(), dialog: null };
+  state.owners.set(id, entry);
   return { id, entry };
 }
 
 export function presentation(ownerId, token) {
-  const entry = owners.get(ownerId);
+  const entry = registry()?.owners.get(ownerId);
   return entry?.dialog?.token === token ? entry : null;
 }
 
 export function newPresentation(ownerId, tab) {
-  const entry = owners.get(ownerId);
+  const state = registry();
+  const entry = state?.owners.get(ownerId);
   if (!entry) return null;
   entry.dialog?.updates.close();
-  entry.dialog = { token: `approvals-dialog-${++sequence}`, tab, updates: queue(true) };
+  entry.dialog = { token: `approvals-dialog-${++state.sequence}`, tab, updates: queue(true) };
   return entry.dialog;
 }
 
@@ -59,12 +70,13 @@ export function relay(packet) {
   return new Promise(ack => { if (!entry.actions.push({ packet, ack })) ack(false); });
 }
 
-export function publish(ownerId) { owners.get(ownerId)?.dialog?.updates.push(true); }
+export function publish(ownerId) { registry()?.owners.get(ownerId)?.dialog?.updates.push(true); }
 
 export function removeOwner(ownerId) {
-  const entry = owners.get(ownerId);
+  const state = registry();
+  const entry = state?.owners.get(ownerId);
   if (!entry) return;
   entry.dialog?.updates.close();
   entry.actions.close();
-  owners.delete(ownerId);
+  state.owners.delete(ownerId);
 }

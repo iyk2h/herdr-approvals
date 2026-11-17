@@ -44,6 +44,7 @@ export default class Approvals extends View {
       this.controller.pending = { sessionKey: 'preview', episode: '1', fingerprint: question.fingerprint, choice: 1, deadline: Date.now() + 3000 };
       return;
     }
+    this.ensurePresentationOwner(cx);
     this.refresh(cx);
     cx.timer.every(2000, cx => this.refresh(cx));
     cx.timer.every(1000, cx => { if (this.controller.pending || this.busy) this.changed(cx); });
@@ -101,10 +102,9 @@ export default class Approvals extends View {
     cx.notify();
     return this.presentation ? this.relay({ action: 'delay', value: ms }) : this.setDelay(ms, cx);
   }
-  openPopup(tab, cx) {
-    if (this.preview || this.closed || checking()) return;
+  ensurePresentationOwner(cx) {
     if (!this.presentationEntry) {
-      const { id, entry } = registerOwner(this);
+      const { id, entry } = registerOwner(this, this.panelId);
       this.ownerId = id; this.presentationEntry = entry;
       cx.spawn(async cx => {
         while (!this.closed) {
@@ -116,6 +116,10 @@ export default class Approvals extends View {
         }
       });
     }
+  }
+  openPopup(tab, cx) {
+    if (this.preview || this.closed || checking()) return;
+    this.ensurePresentationOwner(cx);
     const dialog = newPresentation(this.ownerId, tab === 'settings' ? 'settings' : 'requests');
     this.dialogToken = dialog.token;
     if (this.popupId) closeOverlay(this.popupId);
@@ -166,7 +170,7 @@ export default class Approvals extends View {
   }
   presentationView() {
     const available = presentation(this.ownerId, this.dialogToken);
-    if (!available) return { presentation: true, unavailable: true, focus: this.focus, key: (event, cx) => this.key(event, cx), dismiss: () => this.dismiss() };
+    if (!available) return { presentation: true, unavailable: true, tab: this.tab, focus: this.focus, key: (event, cx) => this.key(event, cx), dismiss: () => this.dismiss() };
     const owner = available.owner;
     const row = owner.controller.rows.find(item => item.sessionKey === owner.selectedKey) ?? owner.controller.rows[0];
     this.visibleRequest = this.requestSnapshot(row); this.visibleChoice = owner.choice;

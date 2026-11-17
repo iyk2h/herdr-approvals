@@ -358,7 +358,9 @@ test('closed and replaced popup capabilities cannot apply queued settings or man
   assert.equal(state.has('approvals.delay'),false);
   owner.handlePresentation=handle;
   const {popup:old}=presentation(owner,cx);
+  assert.ok(popupLayout(old,liveContext()).pathToText('Approval settings'), 'revoked settings retain the correct dialog title');
   const {popup:current}=presentation(owner,cx);
+  assert.ok(popupLayout(old,liveContext()).pathToText('Approval settings'), 'unavailable settings cannot become a request dialog');
   assert.equal(await old.relay({action:'mode',value:'remember'}),false);
   assert.equal(controller.mode,'once');
   assert.equal(controller.pending,pending);

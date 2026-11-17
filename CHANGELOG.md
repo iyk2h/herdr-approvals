@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Preserve popup connections when a folder rescan loads a new copy of unchanged code.
 - Open settings from the sidebar and keep the empty request popup focused on request status.
 - Fit empty request popups to their content and resize the same popup when requests change.
 - Lock current request controls immediately after uncertain delivery.

@@ -10,6 +10,8 @@ The automated checks cover these behaviors:
 - Recovery tests discard stale requests after connection errors and preserve durable input records.
 - Shared setting tests stop stale countdowns and prevent hidden replies from the settings tab.
 - Popup tests cover shared controller state, safe setting actions, closed popups, and stale request actions.
+- Separate module revisions share the mounted owner's mailbox. Replacing a sidebar retires its previous popup capabilities.
+- An isolated native popup trial reproduces a parent-folder rescan, then checks settings actions, popup replacement, and source reloads without agent input.
 - Cancellation tests include the interval between a policy change and the next request refresh.
 - Delay input tests preserve unsaved text and prevent stale Apply actions from replacing an external setting change.
 - Request notices use the matching agent, episode, and command identity.
@@ -44,6 +46,7 @@ npm test
 npm run check:package
 npm run check:install
 python3 tools/native-check.py
+python3 tools/popup-smoke.py
 python3 tools/core-spike.py
 python3 tools/preview.py
 python3 tools/preview.py --selected
