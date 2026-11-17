@@ -45,28 +45,32 @@ class InstallationTests(unittest.TestCase):
         self.env = dict(os.environ, HOME=str(self.home), HERDR_APP_HOME=str(self.app))
         self.user_files = snapshot(self.app)
 
-    def run_installer(self, *args, fail_copy=False):
+    def run_installer(self, *args, fail_copy=False, fail_backup=False):
         argv = [sys.executable, str(self.installer), '--target', str(self.app), *args]
-        if fail_copy:
+        if fail_copy or fail_backup:
             wrapper = '''
 from pathlib import Path
 import runpy, shutil, sys
-installer, source = sys.argv[1:3]
-arguments = sys.argv[3:]
+installer, source, installed, mode = sys.argv[1:5]
+arguments = sys.argv[5:]
 copytree = shutil.copytree
 def interrupted(src, dst, *args, **kwargs):
-    if Path(src).resolve() == Path(source).resolve():
+    selected = Path(source) if mode == 'source' else Path(installed)
+    backup_root = Path.home() / '.local/share/herdr-approvals/backups'
+    destination_matches = mode == 'source' or Path(dst).resolve().is_relative_to(backup_root.resolve())
+    if Path(src).resolve() == selected.resolve() and destination_matches:
         target = Path(dst)
         target.mkdir(parents=True, exist_ok=True)
         (target / 'main.js').write_text('incomplete source copy\\n')
         (target / 'partial.js').write_text('incomplete helper\\n')
-        raise OSError('fixture source copy interrupted')
+        raise OSError('fixture ' + mode + ' copy interrupted')
     return copytree(src, dst, *args, **kwargs)
 shutil.copytree = interrupted
 sys.argv = [installer, *arguments]
 runpy.run_path(installer, run_name='__main__')
 '''
-            argv = [sys.executable, '-c', wrapper, str(self.installer), str(self.source), '--target', str(self.app), *args]
+            mode = 'backup' if fail_backup else 'source'
+            argv = [sys.executable, '-c', wrapper, str(self.installer), str(self.source), str(self.target), mode, '--target', str(self.app), *args]
         return subprocess.run(argv, env=self.env, capture_output=True, text=True, timeout=10)
 
     def old_install(self):
@@ -114,6 +118,21 @@ runpy.run_path(installer, run_name='__main__')
         self.assertNotEqual(result.returncode, 0)
         self.assertIn('fixture source copy interrupted', result.stderr)
         self.assertEqual(snapshot(self.app), previous, 'a failed source copy must not modify or leave temporary files in the live home')
+
+    def test_failed_backup_preserves_the_install_and_leaves_only_complete_previous_backups(self):
+        self.old_install()
+        previous_app = snapshot(self.app)
+        backups = self.home / '.local/share/herdr-approvals/backups'
+        completed = backups / 'previous-complete'
+        completed.mkdir(parents=True)
+        (completed / 'main.js').write_text('previous complete backup\\n')
+        previous_backups = snapshot(backups)
+        result = self.run_installer('--update', fail_backup=True)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('fixture backup copy interrupted', result.stderr)
+        self.assertEqual(snapshot(self.app), previous_app, 'backup errors must leave the installed version unchanged')
+        self.assertEqual(snapshot(backups), previous_backups,
+                         'an interrupted backup must not leave an incomplete restore choice or remove an earlier complete backup')
 
 
 if __name__ == '__main__':

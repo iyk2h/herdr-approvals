@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Lock current request controls immediately after uncertain delivery.
+- Ignore manual reply shortcuts and old callbacks for locked requests.
+- Publish backup directories only after the backup copy completes.
 - Prepare complete updates before replacement, preserve backups, and remove obsolete files.
 - Preserve global cancellation between policy changes and request refreshes.
 - Synchronize saved delay values without replacing unsaved text or applying stale values.

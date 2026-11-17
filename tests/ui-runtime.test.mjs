@@ -193,6 +193,35 @@ test('settings presentation reuses the owner and closing it preserves its exact 
   owner.close();
 });
 
+test('repeated settings popups preserve one input owner and revoke every closed popup',async()=>{
+  const {owner,controller,cx}=await ownerModel();
+  const pending=controller.pending;
+  const originalSpawn=cx.spawn;
+  let ownerTasks=0;
+  cx.spawn=fn=>{ownerTasks++;return originalSpawn(fn);};
+  globalThis.__approvalReleasedAccesses=0;
+  for(let index=0;index<30;index++){
+    const {popup,popupCx}=presentation(owner,cx);
+    assert.equal(popup.controller,controller);
+    popup.render(popupCx);
+    assert.equal(popupCx.scheduled.length,0,'a settings popup cannot own a countdown timer');
+    popup.close();
+    owner.changed(cx);
+    await Promise.resolve();
+    assert.equal(await popup.relay({action:'delay',value:7000}),false,'closed popups lose their capability');
+    assert.equal(popup.applyDelayInput(popupCx),false,'closed inputs cannot apply a draft');
+    assert.equal(controller.pending,pending,'opening and closing settings cannot restart the current deadline');
+    assert.equal(controller.enabled,true);
+    assert.equal(globalThis.__approvalReleasedAccesses,0);
+  }
+  await controller.flush();
+  assert.deepEqual(await controller.journal.entries(),[],'settings navigation cannot create input or cancellation records');
+  assert.equal(state.has('approvals.delay'),false,'navigation cannot save a new setting');
+  assert.equal(ownerTasks,1,'the owner creates one action consumer for all popup instances');
+  assert.ok(!commands.some(({name})=>name==='agent.focus'));
+  owner.close();
+});
+
 test('popup settings actions update the existing owner through its mailbox without creating another controller',async()=>{
   const {owner,controller,cx}=await ownerModel();
   const {popup}=presentation(owner,cx);
@@ -269,6 +298,30 @@ test('the thin owner never submits hidden manual choices while the regular reque
   const regular=Object.assign(Object.create(Approvals.prototype),{compact:false,tab:'settings',controller:{rows:[row]},selectedKey:'fixture',choice:1,submit(){sends++;}});
   regular.command('approve',context());assert.equal(sends,0);
   regular.tab='requests';regular.command('approve',context());assert.equal(sends,1);
+});
+
+test('quarantined requests reject Enter, approval commands, and stale callbacks before a submission task starts',async()=>{
+  check=false;
+  const results=[];
+  for(const action of ['enter','approve','stale-submit']){
+    let submissions=0,spawns=0;
+    const tasks=[];
+    const row={sessionKey:'fixture',episode:'1',address:'t1',agent:'codex',status:'blocked',
+      question:parseCodex(basicPrompt),quarantined:true};
+    const controller={rows:[row],async submit(){submissions++;return{status:'unknown'};}};
+    const view=Object.assign(Object.create(Approvals.prototype),{compact:false,tab:'requests',controller,
+      preview:false,closed:false,busy:false,choice:1,selection:null,selectedKey:row.sessionKey});
+    const cx=context();
+    cx.spawn=fn=>{spawns++;const task=fn(cx);tasks.push(task);return task;};
+    if(action==='enter')view.key({key:'enter'},cx);
+    else if(action==='approve')view.command('approve',cx);
+    else view.submit({...row,quarantined:false},cx);
+    await Promise.all(tasks);
+    results.push({action,submissions,spawns});
+  }
+  assert.deepEqual(results,[{action:'enter',submissions:0,spawns:0},{action:'approve',submissions:0,spawns:0},
+    {action:'stale-submit',submissions:0,spawns:0}],
+    'disabled requests cannot start controller submission or persistence work through keyboard shortcuts');
 });
 
 test('custom whole-second delays persist and update the owner without accepting invalid settings',()=>{

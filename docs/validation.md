@@ -13,6 +13,8 @@ The automated checks cover these behaviors:
 - Cancellation tests include the interval between a policy change and the next request refresh.
 - Delay input tests preserve unsaved text and prevent stale Apply actions from replacing an external setting change.
 - Request notices use the matching agent, episode, and command identity.
+- Uncertain delivery immediately locks the matching request, including manual shortcuts and old callbacks.
+- Popup lifecycle tests open and close settings 30 times without replacing the controller or writing input records.
 - Native checks render ten full and compact states, including custom delays, without input or persistent changes.
 - An isolated core reads two fictional TUIs. Both receive one reply through the native provider after the same seven-second custom countdown.
 - Separate preview homes render the default settings and agent picker without Cockpit or input.
@@ -20,6 +22,7 @@ The automated checks cover these behaviors:
 Installation into a scratch Herdr home succeeds.
 Without `--update`, a second installation stops before it overwrites the mod.
 Installer checks cover saved backups, obsolete file removal, and interrupted copies.
+An interrupted backup copy leaves no incomplete backup and preserves earlier backups.
 The installer leaves keys, layouts, Cockpit, and shared settings unchanged.
 
 Live trials on 2026-11-17 used fictional agent terminals in the installed Herdr app.

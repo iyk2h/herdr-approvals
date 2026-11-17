@@ -34,3 +34,5 @@ npm run check:package
 python3 tools/native-check.py
 python3 tools/core-spike.py
 ```
+
+See the [additional reliability review](sixth-pass-review.md) for the next set of checks.

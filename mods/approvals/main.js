@@ -295,7 +295,9 @@ export default class Approvals extends View {
     setShared('approvals.provider', this.connection); this.makeController(); this.refresh(cx); this.changed(cx);
   }
   submit(row, cx) {
-    if (this.preview || this.busy || this.choice === null) return;
+    if (this.preview || this.busy || this.choice === null || !row || row.quarantined) return;
+    const current = this.controller.rows.find(item => item.sessionKey === row.sessionKey);
+    if (!current || current.quarantined) return;
     const choice = this.choice, selection = this.selection;
     cx.spawn(async cx => { this.busy = true; this.changed(cx); try { await this.controller.submit(row.sessionKey, choice, selection); } catch (e) { this.error = String(e.message || e); } finally { this.busy = false; this.choice = null; this.selection = null; this.changed(cx); this.schedule(cx); } });
   }

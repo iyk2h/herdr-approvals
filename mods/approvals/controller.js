@@ -50,6 +50,16 @@ export class ApprovalController {
       && (entry.status === 'dispatching' || entry.status === 'unknown'));
   }
 
+  quarantineSession(sessionKey) {
+    // A refresh started before the fence cannot restore its earlier row state.
+    this.refreshSequence += 1;
+    this.rows = this.rows.map(row => row.sessionKey === sessionKey ? { ...row, quarantined: true } : row);
+    for (const [key, entry] of this.countdowns) {
+      if (entry.row.sessionKey === sessionKey) this.countdowns.delete(key);
+    }
+    this.syncPending();
+  }
+
   persistCancellation(row) {
     const requestKey = this.key(row);
     const write = Promise.resolve().then(async () => {
@@ -281,6 +291,7 @@ export class ApprovalController {
       if (!allowed()) return { status: 'cancelled' };
       if (this.quarantined(row, records)) {
         this.status = 'unknown';
+        this.quarantineSession(row.sessionKey);
         return { status: 'unknown' };
       }
       if (cancelled(records)) {
@@ -303,6 +314,7 @@ export class ApprovalController {
         this.suppressed.add(key);
         const records = await this.journal.entries();
         this.status = this.quarantined(row, records) ? 'unknown' : cancelled(records) ? 'cancelled' : 'already';
+        if (this.status === 'unknown') this.quarantineSession(row.sessionKey);
         return { status: this.status };
       }
       if (!allowed()) {
@@ -336,13 +348,16 @@ export class ApprovalController {
       const result = await this.provider.submit(latest, choice, { source, allowed });
       const status = result?.status === 'delivered' ? 'sent' : result?.status === 'rejected' ? 'rejected' : 'unknown';
       this.status = status;
+      if (status === 'unknown') this.quarantineSession(row.sessionKey);
       await this.journal.mark(key, status);
       return { status };
     } catch (error) {
       this.error = String(error?.message ?? error);
       this.status = dispatched ? 'unknown' : 'error';
+      if (dispatched) this.quarantineSession(row.sessionKey);
       if (claimed) {
-        try { await this.journal.mark(key, this.status); } catch { /* The original dispatching claim remains a fence. */ }
+        try { await this.journal.mark(key, this.status); }
+        catch { this.quarantineSession(row.sessionKey); }
       }
       return { status: this.status };
     } finally {
