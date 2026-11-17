@@ -6,7 +6,7 @@ Codex permission controls for Herdr. Manual replies, optional automatic approval
 
 ## Release description
 
-Herdr Approvals adds permission controls for supported local Codex menus in English.
+Herdr Approval adds permission controls for supported local Codex menus in English.
 Automatic approval is off by default. Cockpit is optional.
 Supported requests include command execution and terminal input. Terminal input approvals always allow once.
 

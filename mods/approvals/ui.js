@@ -195,7 +195,7 @@ function compactPanel(view) {
   return h_flex().id('approvals-compact').w_full().h(40).min_h(40).max_h(40).min_w(0).px(8).gap(4).items_center()
     .bg(t.background).text_color(t.foreground).text_size(12)
     .track_focus(view.focus).on_key_down((event, cx) => { if (view.key(event, cx)) cx.stop_propagation(); })
-    .child(div().flex_1().min_w(0).truncate().font_semibold().text_size(13).child('Approvals'))
+    .child(div().flex_1().min_w(0).truncate().font_semibold().text_size(13).child('Approval'))
     .child(autoToggle('approvals-compact-auto', view))
     .child(button('approvals-compact-requests', div().min_w(0).truncate().text_size(12).child(status), cx => row ? view.review(row, cx) : view.setTab('requests', cx),
       { compact: true, align: 'center', disabled: view.preview || view.busy || controller.busy }).w(78).flex_none().px(4).py(3))
@@ -238,7 +238,7 @@ function popupPanel(view) {
     .child(div().flex_1().min_w(0).font_semibold().text_size(17).child(view.tab === 'settings' ? 'Approval settings' : 'Approval requests'))
     .child(button('approvals-popup-close', 'Close', () => view.dismiss(), { compact: true, align: 'center' })));
   root.child(separator());
-  if (view.unavailable) return root.child(description('This panel is no longer available. Open Approvals again.'));
+  if (view.unavailable) return root.child(description('This panel is no longer available. Open Approval again.'));
   if (view.preview) root.child(description('Preview · No input'));
   if (view.tab === 'settings') return root.child(settings(view));
   return requestPanel(root, view, row);
@@ -255,7 +255,7 @@ export function panel(view, cx) {
     .track_focus(view.focus).on_key_down((event, cx) => { if (view.key(event, cx)) cx.stop_propagation(); });
   root.child(h_flex().min_w(0).items_start().gap(10)
     .child(v_flex().flex_1().min_w(0).gap(3)
-      .child(div().text_size(19).font_semibold().child('Approvals'))
+      .child(div().text_size(19).font_semibold().child('Approval'))
       .child(description('Codex permission requests')))
     .child(div().flex_none().px(8).py(4).rounded(6).bg(t.raised || t.surface).text_size(12).text_color(t.muted).child(`${rows.length} pending`)));
   root.child(h_flex().gap(4).min_w(0)

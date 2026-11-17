@@ -1,4 +1,4 @@
-# Herdr Approvals
+# Herdr Approval
 
 Standalone native Herdr Mod. Runtime is GPUI JavaScript, not a browser or Node.
 No runtime dependencies on Cockpit, Node, Rust, or a new daemon.

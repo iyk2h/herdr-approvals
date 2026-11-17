@@ -1,8 +1,8 @@
-# Herdr Approvals
+# Herdr Approval
 
 A native permission panel for Herdr. Cockpit is optional.
 
-![Requests and settings](preview.png)
+![Compact Approval strip with its settings popup in a demo layout](preview.png)
 
 By default, the mod opens in a 360px right panel. It uses the active Herdr theme.
 **Requests** shows the requested action, numbered replies, and an automatic approval countdown.

@@ -1,11 +1,13 @@
-# Herdr Approvals
+# Herdr Approval
 
 A native permission panel for Herdr. Cockpit is optional.
 
-![Requests and settings with a fictional command](preview.png)
-
 You can reply to a Codex permission request or enable automatic approval.
 Automatic approval is off by default.
+
+![Compact Approval strip with its settings popup in a demo layout](preview.png)
+
+*Compact mode in a demo layout. Settings open in a popup. All requests are fictional.*
 
 ## Settings
 
@@ -20,7 +22,13 @@ Automatic approval is off by default.
 **All agents** includes new local Codex agents in Herdr.
 **Selected agents** lets you select those agents before a request arrives.
 Selection applies to the current terminal process. A new process requires a new selection.
-See the [agent picker](agents-preview.png).
+
+<details>
+<summary>View agent selection</summary>
+
+<img src="agents-preview.png" alt="Selected agents in the Approval settings popup" width="480">
+
+</details>
 
 **Allow once** permits the current request.
 **Save command rule** selects a command rule that Codex offers.
@@ -37,6 +45,13 @@ In a popup, Esc closes the window.
 In the full panel, Esc stops all current automatic requests. Cancellation sends no rejection.
 **Open agent** shows the terminal.
 Other mods can open a tab with `approvals.settings` or `approvals.requests`. These commands send no reply.
+
+<details>
+<summary>View a request</summary>
+
+<img src="requests-preview.png" alt="Approval request popup with a fictional command and numbered replies" width="480">
+
+</details>
 
 ## Requirements
 
@@ -58,7 +73,7 @@ Validation used macOS. Linux is not yet validated.
 For installation by an agent, give it this instruction:
 
 ```text
-Read ~/.config/herdr-app/AGENTS.md, then install the Approvals mod from https://github.com/iyk2h/herdr-approvals.
+Read ~/.config/herdr-app/AGENTS.md, then install the Approval mod from https://github.com/iyk2h/herdr-approvals.
 ```
 
 Copy `mods/approvals/` to `~/.config/herdr-app/mods/approvals/`.

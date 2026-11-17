@@ -5,7 +5,7 @@ import os
 import shutil
 import tempfile
 
-parser = ArgumentParser(description='Install the independent Herdr Approvals mod')
+parser = ArgumentParser(description='Install the independent Herdr Approval mod')
 parser.add_argument('--target', type=Path, default=Path(os.environ.get('HERDR_APP_HOME', str(Path.home() / '.config/herdr-app'))))
 parser.add_argument('--update', action='store_true')
 args = parser.parse_args()
