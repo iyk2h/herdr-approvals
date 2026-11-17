@@ -140,6 +140,7 @@ export default class Approvals extends View {
   }
   command(name, cx) {
     if (name === 'focus' || name === 'open') this.focus.focus();
+    else if (name === 'settings' || name === 'requests') { this.setTab(name, cx); this.focus.focus(); }
     else if (name === 'cancel') this.cancel(cx);
     else if (name === 'toggle-auto') this.toggle(cx);
     else if (name === 'refresh') this.refresh(cx);

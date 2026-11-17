@@ -65,3 +65,24 @@ test('settings persist delay and scope and update an active controller immediate
   view.setScope('selected',context());assert.equal(state.get('approvals.scope'),'selected');assert.equal(view.scope,'selected');
   view.setMode('remember',context());assert.equal(state.get('approvals.mode'),'remember');assert.equal(controller.mode,'remember');
 });
+
+test('navigation commands focus the requested tab without sending a hidden selected approval',()=>{
+  let sends=0,focused=0;
+  const row={sessionKey:'fixture',question:parseCodex(basicPrompt)};
+  const view=Object.assign(Object.create(Approvals.prototype),{
+    tab:'requests',controller:{rows:[row]},selectedKey:'fixture',choice:1,
+    focus:{focus(){focused++;}},submit(){sends++;},
+  });
+  const cx=context();
+
+  view.command('settings',cx);
+  assert.equal(view.tab,'settings');
+  assert.equal(focused,1);
+  assert.equal(view.key({key:'enter'},cx),false);
+  assert.equal(sends,0,'Enter in the opened settings tab cannot approve the hidden request');
+
+  view.command('requests',cx);
+  assert.equal(view.tab,'requests');
+  assert.equal(focused,2);
+  assert.equal(sends,0,'opening requests is navigation, not an approval action');
+});

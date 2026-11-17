@@ -5,7 +5,7 @@ All prompts and commands in the test fixtures are fictional.
 
 The automated checks cover these behaviors:
 
-- 80 tests cover parsing, command identity, cursor movement, countdowns, cancellation, competing replies, durable claims, and uncertain delivery.
+- 81 tests cover parsing, command identity, cursor movement, countdowns, cancellation, competing replies, durable claims, and uncertain delivery.
 - Agent catalog tests cover selection before a request arrives, inactive selections, and new agents under all or selected scope.
 - Recovery tests discard stale requests after connection errors and preserve durable input records.
 - Shared setting tests stop stale countdowns and prevent hidden replies from the settings tab.

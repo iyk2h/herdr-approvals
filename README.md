@@ -33,6 +33,7 @@ Ambiguous rules require a manual reply.
 Select a numbered reply. Then press Enter or select **Send reply**.
 Selection stops automatic approval for that request.
 Esc cancels automatic approval without a rejection. **Open agent** shows the terminal.
+Other mods can open a tab with `approvals.settings` or `approvals.requests`. These commands send no reply.
 
 ## Requirements
 
