@@ -67,12 +67,12 @@ If you use `keys.json`, examine the existing bindings before you copy the entrie
 For a compact widget, add this block to a personal layout:
 
 ```json
-{"id":"approval-widget","type":"block","size":{"px":112},"content":{"mod":"approvals","props":{"compact":true,"panelId":"approval-widget"}}}
+{"id":"approval-widget","type":"block","size":{"px":40},"content":{"mod":"approvals","props":{"compact":true,"panelId":"approval-widget"}}}
 ```
 
-The widget expands to 164px during a countdown. **Settings** and **Review** expand the same widget to 620px.
-**Collapse** restores the small widget and preserves its automatic timer.
-**Review** cancels automatic approval for that request before it opens the command and replies.
+The strip stays 40px high in all states. **Settings** opens a popup.
+Select the request count to read the command and replies. Review pauses automatic approval for that request.
+Closing settings preserves the automatic timer.
 
 ## Cockpit and delivery
 

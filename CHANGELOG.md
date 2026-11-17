@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Keep the compact strip at 40px and show settings and request details in popups.
 - Add a compact widget with inline settings and request review.
 - Prevent hidden selections from accepting approval commands in settings.
 - Select working and idle Codex agents before a permission request arrives.

@@ -8,8 +8,8 @@ The panel fits in a 360px sidebar and uses the active Herdr theme.
 **Requests** shows the command, numbered replies, and an automatic approval countdown.
 **Settings** controls automatic approval, delay, agents, the automatic reply, and the connection.
 
-An optional compact widget fits above a usage panel. Settings and requests expand inside the same widget.
-Collapse preserves the automatic timer. The widget uses the same controller in both sizes.
+A 40px strip fits above a usage panel. Its height stays fixed.
+Settings and request details open in popups. The strip remains the only input controller.
 
 ## Reply
 

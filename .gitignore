@@ -8,3 +8,13 @@ install-fixture/
 CONTRACT.md
 mods/**/*.d.ts
 mods/**/jsconfig.json
+
+deployment-result.json
+deploy.py
+
+verify_live.py
+live-result.json
+fixture.py
+popup-close-input.json
+settings-popup.png
+thin-strip.png

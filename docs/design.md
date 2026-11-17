@@ -1,5 +1,10 @@
 # Design
 
+The compact strip owns one controller. Passive popups use the same controller through a presentation registry.
+Popup actions enter a mailbox. The owner processes them in its own task context.
+Closing a popup revokes its token and preserves the automatic timer.
+Request identities reject stale choices. The strip keeps the same height in every state.
+
 The native provider is the default connection. Cockpit is an optional connection.
 Both connections use the same terminal identity and input records.
 If a connection fails, the controller does not switch senders.

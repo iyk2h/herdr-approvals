@@ -12,6 +12,7 @@ let checking = false;
 globalThis.__pickerElement = () => new Proxy({}, {get: (_target, key) => key === 'then' ? undefined : () => globalThis.__pickerElement()});
 globalThis.__pickerHost = {
   checking: () => checking, shared: key => settings.get(key), setShared: (key, value) => settings.set(key, value),
+  openOverlay: () => { io += 1; throw new Error('Unexpected popup'); }, closeOverlay: () => { io += 1; },
   props: () => ({}), agents: () => [], appHome: () => '/fixture', home: () => '/fixture',
   nextCommand: () => new Promise(() => {}), run: () => { io += 1; },
   theme: () => ({background: '#101010', foreground: '#ffffff', muted: '#aaaaaa', raised: '#202020', surface: '#202020', hover: '#303030'}),

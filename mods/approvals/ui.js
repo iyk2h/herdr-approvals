@@ -27,6 +27,21 @@ const description = text => div().min_w(0).text_size(12).text_color(theme().mute
 const label = text => div().min_w(0).font_medium().whitespace_normal().child(text);
 const separator = () => div().h(1).w_full().flex_none().bg(theme().border);
 
+function autoToggle(id, view) {
+  const t = theme(), enabled = view.controller.enabled;
+  const track = h_flex().w(26).h(16).p(2).rounded(8).items_center().flex_none()
+    .bg(enabled ? t.accent : t.border)
+    .when(enabled, el => el.justify_end())
+    .when(!enabled, el => el.justify_start())
+    .child(div().w(12).h(12).rounded(6).bg(enabled ? t.accent_foreground : t.muted));
+  const state = h_flex().gap(5).items_center()
+    .child(div().text_size(11).font_semibold().text_color(enabled ? t.foreground : t.muted)
+      .child(enabled ? 'ON' : 'OFF'))
+    .child(track);
+  return button(id, state, cx => view.toggle(cx),
+    { disabled: view.preview, compact: true, align: 'center' }).w(68).flex_none().px(4).py(3);
+}
+
 function setting(name, detail, control) {
   return v_flex().min_w(0).gap(8)
     .child(v_flex().min_w(0).gap(4).child(label(name)).child(description(detail)))
@@ -47,8 +62,7 @@ function settings(view) {
   body.child(h_flex().items_start().gap(12)
     .child(v_flex().flex_1().min_w(0).gap(4)
       .child(label('Auto-approve')).child(description('Allow supported requests after the delay.')))
-    .child(button('approvals-auto', controller.enabled ? 'On' : 'Off', cx => view.toggle(cx),
-      { selected: controller.enabled, disabled: view.preview, compact: true, align: 'center' })));
+    .child(autoToggle('approvals-auto', view)));
   body.child(separator());
   body.child(setting('Delay', 'Time to examine the command or cancel.',
     segmented('approvals-delay', [{ value: 3000, label: '3 sec' }, { value: 5000, label: '5 sec' }, { value: 10000, label: '10 sec' }],
@@ -87,7 +101,7 @@ function settings(view) {
     ? 'Use the existing local Cockpit installation.'
     : 'Connect directly to Herdr. Cockpit is optional.',
   segmented('approvals-provider', [{ value: 'native', label: 'Herdr' }, { value: 'cockpit', label: 'Cockpit' }],
-    view.connection, (value, cx) => { if (value !== view.connection) view.switchProvider(cx); }, connectionDisabled)));
+    view.connection, (value, cx) => { if (value !== view.connection) view.switchProvider(cx, value); }, connectionDisabled)));
   if (rows.length) body.child(description('Resolve pending requests before you change the connection.'));
   if (view.error || controller.error) body.child(description(String(view.error || controller.error)));
   return body;
@@ -102,7 +116,7 @@ function countdown(view) {
     .child(v_flex().flex_1().min_w(0).gap(3)
       .child(div().font_medium().whitespace_normal().child(`Auto-reply starts in ${seconds} sec`))
       .child(description(target?.title || target?.address || 'Pending request')))
-    .child(button('approvals-cancel', 'Cancel · Esc', cx => view.cancel(cx), { compact: true }));
+    .child(button('approvals-cancel', view.presentation ? 'Cancel' : 'Cancel · Esc', cx => view.cancel(cx), { compact: true }));
 }
 
 function requests(view, row) {
@@ -158,47 +172,63 @@ function compactPanel(view) {
   const t = theme(), controller = view.controller, rows = controller.rows ?? [], pending = controller.pending;
   const row = rows.find(item => item.sessionKey === pending?.sessionKey)
     ?? rows.find(item => item.sessionKey === view.selectedKey) ?? rows[0];
-  const root = v_flex().id('approvals-compact').size_full().min_h(0).min_w(0).p(8).gap(6)
+  const seconds = pending ? Math.max(0, Math.ceil((pending.deadline - Date.now()) / 1000)) : null;
+  const status = view.busy || controller.busy ? 'Sending'
+    : pending ? `${rows.length} · ${seconds}s`
+    : view.error || controller.error ? 'Check' : `${rows.length} pending`;
+  return h_flex().id('approvals-compact').w_full().h(40).min_h(40).max_h(40).min_w(0).px(8).gap(4).items_center()
     .bg(t.background).text_color(t.foreground).text_size(12)
-    .track_focus(view.focus).on_key_down((event, cx) => { if (view.key(event, cx)) cx.stop_propagation(); });
-  root.child(h_flex().min_w(0).items_center().gap(4)
-    .child(div().flex_1().min_w(0).font_semibold().text_size(14).child('Approvals'))
-    .child(button('approvals-compact-auto', controller.enabled ? 'On' : 'Off', cx => view.toggle(cx),
-      { selected: controller.enabled, disabled: view.preview, compact: true, align: 'center' }))
-    .child(button('approvals-compact-settings', 'Settings', cx => view.setTab('settings', cx), { compact: true, align: 'center' })));
-  if (view.preview) root.child(description('Preview · No input'));
-  if (pending) {
-    const seconds = Math.max(0, Math.ceil((pending.deadline - Date.now()) / 1000));
-    root.child(v_flex().min_w(0).gap(3)
-      .child(div().font_medium().child(`Starts in ${seconds} sec`))
-      .child(div().min_w(0).truncate().text_color(t.muted).child(row?.title || row?.address || 'Pending request')));
-    root.child(h_flex().min_w(0).gap(4)
-      .child(button('approvals-compact-cancel', 'Cancel', cx => view.cancel(cx), { compact: true, grow: true, align: 'center', disabled: view.preview }))
-      .child(button('approvals-compact-review', 'Review', cx => view.review(row, cx), { compact: true, grow: true, align: 'center', disabled: view.preview || !row })));
-  } else if (row) {
-    const state = view.busy || controller.busy ? 'Reply in progress'
-      : row.quarantined ? 'Delivery uncertain'
-      : `${rows.length} ${rows.length === 1 ? 'request' : 'requests'} waiting`;
-    root.child(h_flex().min_w(0).items_center().gap(6)
-      .child(div().flex_1().min_w(0).text_color(t.muted).child(state))
-      .child(button('approvals-compact-review', 'Review', cx => view.review(row, cx), { compact: true, disabled: view.preview || view.busy || controller.busy })));
-  } else {
-    root.child(description(view.error || controller.error ? 'Connection needs attention. Open Settings.' : 'Waiting for requests.'));
-    root.child(description(`${(view.delayMs ?? 3000) / 1000} sec · ${view.scope === 'selected' ? 'Selected agents' : 'All agents'}`));
+    .track_focus(view.focus).on_key_down((event, cx) => { if (view.key(event, cx)) cx.stop_propagation(); })
+    .child(div().flex_1().min_w(0).truncate().font_semibold().text_size(13).child('Approvals'))
+    .child(autoToggle('approvals-compact-auto', view))
+    .child(button('approvals-compact-requests', status, cx => row ? view.review(row, cx) : view.setTab('requests', cx),
+      { compact: true, align: 'center', disabled: view.preview || view.busy || controller.busy }).w(78).flex_none().py(3))
+    .child(button('approvals-compact-settings', 'Settings', cx => view.setTab('settings', cx),
+      { compact: true, align: 'center', disabled: view.preview }).w(64).flex_none().py(3));
+}
+
+function requestPanel(root, view, row) {
+  const timer = countdown(view), status = notice(view);
+  if (timer) root.child(timer);
+  if (status) root.child(status);
+  if (row?.quarantined) root.child(description('Reply in the agent terminal.'));
+  root.child(requests(view, row));
+  if (row) {
+    root.child(separator()).child(h_flex().min_w(0).gap(8)
+      .child(button('approvals-submit', 'Send reply', cx => view.submit(row, cx),
+        { variant: 'primary', grow: true, align: 'center', disabled: view.choice === null || view.busy || view.preview || row.quarantined }))
+      .child(button('approvals-focus', 'Open agent', cx => view.inspect(row, cx), { variant: 'secondary', align: 'center', disabled: view.preview })));
+    root.child(description(view.presentation ? '1–9 select · Enter sends · Esc closes' : '1–9 select · Enter sends · Esc cancels auto-approve'));
   }
   return root;
 }
 
+function popupPanel(view) {
+  const t = theme();
+  const root = v_flex().id('approvals-popup').size_full().min_h(0).min_w(0).p(18).gap(14)
+    .bg(t.background).text_color(t.foreground).text_size(13)
+    .track_focus(view.focus).on_key_down((event, cx) => { if (view.key(event, cx)) cx.stop_propagation(); });
+  root.child(h_flex().min_w(0).items_center().gap(8)
+    .child(div().flex_1().min_w(0).font_semibold().text_size(17).child(view.tab === 'settings' ? 'Approval settings' : 'Approval requests'))
+    .child(button('approvals-popup-close', 'Close', () => view.dismiss(), { compact: true, align: 'center' })));
+  root.child(separator());
+  if (view.unavailable) return root.child(description('This panel is no longer available. Open Approvals again.'));
+  if (view.preview) root.child(description('Preview · No input'));
+  if (view.tab === 'settings') return root.child(settings(view));
+  const rows = view.controller.rows ?? [];
+  const row = rows.find(item => item.sessionKey === view.selectedKey) ?? rows[0];
+  return requestPanel(root, view, row);
+}
+
 export function panel(view, cx) {
-  if (view.compact && !view.expanded) return compactPanel(view);
+  if (view.presentation) return popupPanel(view);
+  if (view.compact) return compactPanel(view);
   const t = theme(), controller = view.controller, rows = controller.rows ?? [];
   const row = rows.find(item => item.sessionKey === view.selectedKey) ?? rows[0];
   const activeTab = view.tab === 'settings' ? 'settings' : 'requests';
   const root = v_flex().id('approvals-panel').size_full().min_h(0).min_w(0).p(16).gap(14)
     .bg(t.background).text_color(t.foreground).text_size(13)
     .track_focus(view.focus).on_key_down((event, cx) => { if (view.key(event, cx)) cx.stop_propagation(); });
-  if (view.compact) root.child(h_flex().justify_end()
-    .child(button('approvals-collapse', 'Collapse', cx => view.collapse(cx), { compact: true })));
   root.child(h_flex().min_w(0).items_start().gap(10)
     .child(v_flex().flex_1().min_w(0).gap(3)
       .child(div().text_size(19).font_semibold().child('Approvals'))
@@ -210,17 +240,5 @@ export function panel(view, cx) {
   root.child(separator());
   if (view.preview) root.child(description('Preview · No input'));
   if (activeTab === 'settings') return root.child(settings(view));
-  const timer = countdown(view), status = notice(view);
-  if (timer) root.child(timer);
-  if (status) root.child(status);
-  if (row?.quarantined) root.child(description('Reply in the agent terminal.'));
-  root.child(requests(view, row));
-  if (row) {
-    root.child(separator()).child(h_flex().min_w(0).gap(8)
-      .child(button('approvals-submit', 'Send reply', cx => view.submit(row, cx),
-        { variant: 'primary', grow: true, align: 'center', disabled: view.choice === null || view.busy || view.preview || row.quarantined }))
-      .child(button('approvals-focus', 'Open agent', cx => view.inspect(row, cx), { variant: 'secondary', align: 'center', disabled: view.preview })));
-    root.child(description('1–9 select · Enter sends · Esc cancels auto-approve'));
-  }
-  return root;
+  return requestPanel(root, view, row);
 }

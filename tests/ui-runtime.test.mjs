@@ -5,12 +5,14 @@ import { ApprovalController } from '../mods/approvals/controller.js';
 import { MemoryJournal } from '../mods/approvals/state.js';
 import { parseCodex } from '../mods/approvals/parsers/codex.js';
 import { basicPrompt } from './fixtures/prompts.mjs';
+import { sha256 } from '../mods/approvals/digest.js';
 
-const state=new Map();const commands=[];let io=0;let check=true;
+const state=new Map();const commands=[];const overlays=[];const closedOverlays=[];let io=0;let check=true;
 globalThis.__approvalElement=()=>new Proxy({}, {get:(_target,key)=>key==='then'?undefined:(...args)=>globalThis.__approvalElement()});
 globalThis.__approvalHost={
   checking:()=>check,shared:key=>state.get(key),setShared:(key,value)=>state.set(key,value),
   agents:()=>[],props:()=>({}),theme:()=>({background:'#101010',foreground:'#ffffff',muted:'#aaaaaa',raised:'#202020',surface:'#202020',hover:'#303030'}),
+  openOverlay:spec=>{io++;overlays.push(spec);return `popup-${overlays.length}`;},closeOverlay:id=>{io++;closedOverlays.push(id);},
   appHome:()=>'/fixture',home:()=>'/fixture',nextCommand:()=>new Promise(()=>{}),run:(name,args)=>{io++;commands.push({name,args});},
   exec:async()=>{io++;throw new Error('Unexpected exec');},hc:async()=>{io++;throw new Error('Unexpected hc');},readTextFile:async()=>{io++;throw new Error('Unexpected file read');},
 };
@@ -87,7 +89,7 @@ test('navigation commands focus the requested tab without sending a hidden selec
   assert.equal(sends,0,'opening requests is navigation, not an approval action');
 });
 
-test('compact checking and preview render one collapsed controller without live IO or settings writes',()=>{
+test('compact checking and preview render one fixed strip without live IO or settings writes',()=>{
   for(const checking of [false,true]){
     check=checking;state.clear();commands.length=0;io=0;
     const view=new Approvals(),cx=context();
@@ -95,7 +97,6 @@ test('compact checking and preview render one collapsed controller without live 
     const controller=view.controller;
     view.render(cx);
     assert.equal(view.compact,true);
-    assert.equal(view.expanded,false);
     assert.equal(view.panelId,'fixture-panel');
     assert.equal(view.controller,controller);
     assert.equal(io,0);
@@ -105,111 +106,159 @@ test('compact checking and preview render one collapsed controller without live 
   }
 });
 
-test('compact navigation and collapse resize the same slot without sending or cancelling its active countdown',async()=>{
-  check=false;state.clear();commands.length=0;
+function liveContext() {
+  const scheduled=[];
+  const cx={scheduled,focus_handle:()=>({focus(){}}),notify(){},stop_propagation(){},
+    timer:{after(ms,fn){scheduled.push({ms,fn});return{cancel(){}};},every(){throw new Error('No automatic timer belongs to a popup');}},
+    spawn(fn){const task=fn(cx);task.catch?.(()=>{});return task;},
+  };
+  return cx;
+}
+
+async function ownerModel() {
+  check=false;state.clear();commands.length=0;overlays.length=0;closedOverlays.length=0;
+  state.set('approvals.enabled',true);state.set('approvals.mode','once');state.set('approvals.scope','all');
   let sends=0;
-  const row={sessionKey:'fixture',episode:'1',address:'t1',agent:'codex',status:'blocked',question:parseCodex(basicPrompt)};
-  const controller=new ApprovalController({provider:{id:'native',list:async()=>[row],readQuestion:async()=>row,
-    submit:async()=>{sends++;return{status:'delivered'};}},journal:new MemoryJournal(),now:()=>0});
+  const source={sessionKey:'fixture',episode:'1',address:'t1',agent:'codex',status:'blocked',question:parseCodex(basicPrompt)};
+  const controller=new ApprovalController({provider:{id:'native',list:async()=>[source],readQuestion:async()=>source},journal:new MemoryJournal(),now:()=>0});
   controller.setEnabled(true);await controller.refresh();
+  const cx=liveContext();
+  const owner=Object.assign(Object.create(Approvals.prototype),{
+    compact:true,panelId:'fixture-panel',preview:false,closed:false,tab:'requests',controller,
+    sessionCatalog:[],selectedKey:'fixture',choice:1,selection:null,busy:false,refreshing:false,
+    mode:'once',connection:'native',scope:'all',delayMs:3000,selectedSessions:[],focus:cx.focus_handle(),
+    makeController(){throw new Error('A presentation cannot replace the input owner');},
+    refresh(){},
+    submit(row,taskContext){sends++;assert.equal(taskContext,cx,'manual input runs in the owner task context');},
+  });
+  return {owner,controller,cx,row:controller.rows[0],sends:()=>sends};
+}
+
+function presentation(owner,cx,tab='settings') {
+  owner.openPopup(tab,cx);
+  const spec=overlays.at(-1);
+  assert.ok(spec,'navigation must open a native overlay');
+  assert.equal(spec.mod,'approvals');
+  assert.equal(spec.props.presentation,true);
+  assert.equal(spec.props.tab,tab);
+  const popup=Object.assign(new Approvals(),{
+    makeController(){throw new Error('A popup cannot create a provider or controller');},
+    refresh(){throw new Error('A popup cannot start a provider refresh');},
+  });
+  const popupCx=liveContext();
+  popup.init({...spec.props,overlay:`popup-${overlays.length}`},popupCx);
+  return {popup,popupCx,spec};
+}
+
+const snapshot=row=>({sessionKey:row.sessionKey,episode:row.episode,digest:sha256(row.question.fingerprint)});
+
+test('compact height stays 40px for idle countdown sending and error without inline expansion',async()=>{
+  const {owner,controller,cx}=await ownerModel();
+  for(const status of ['idle','countdown','dispatching','error']){
+    controller.status=status;controller.pending=status==='countdown'?{sessionKey:'fixture',deadline:3000}:null;
+    owner.updateCompactSize(cx);
+  }
+  owner.setTab('settings',cx);
+  owner.setTab('requests',cx);
+  const sizes=commands.filter(item=>item.name==='layout.resize');
+  assert.ok(sizes.length>0);
+  assert.ok(sizes.every(item=>item.args.id==='fixture-panel'&&item.args.px===40),'pending requests and popups cannot move surrounding panels');
+  assert.equal(overlays.length,2,'compact tab navigation uses popups');
+  owner.close();
+});
+
+test('settings presentation reuses the owner and closing it preserves its exact automatic countdown',async()=>{
+  const {owner,controller,cx}=await ownerModel();
   const pending=controller.pending;
-  const view=Object.assign(Object.create(Approvals.prototype),{
-    compact:true,expanded:false,panelId:'fixture-panel',preview:false,closed:false,tab:'requests',
-    controller,selectedKey:row.sessionKey,choice:1,focus:{focus(){}},
-    makeController(){throw new Error('Navigation must reuse its existing controller');},
-    submit(){sends++;},
-  });
-  const cx=context();
-
-  view.setTab('settings',cx);
-  assert.equal(view.expanded,true);
-  assert.equal(view.tab,'settings');
-  assert.deepEqual(commands.at(-1),{name:'layout.resize',args:{id:'fixture-panel',px:620}});
-  assert.equal(view.key({key:'enter'},cx),false);
-  assert.equal(sends,0);
-  assert.equal(view.controller,controller);
+  const {popup,popupCx}=presentation(owner,cx);
+  assert.equal(popup.controller,controller);
+  const beforeIO=io;
+  popup.render(popupCx);
+  assert.equal(io,beforeIO,'presentation rendering cannot start provider IO');
+  assert.equal(popupCx.scheduled.length,0);
+  popup.close();
   assert.equal(controller.enabled,true);
   assert.equal(controller.pending,pending);
+  assert.equal(controller.closed,false);
+  await controller.flush();
+  assert.deepEqual(await controller.journal.entries(),[],'closing settings is not cancellation');
+  owner.close();
+});
 
-  view.setTab('requests',cx);
-  assert.equal(view.expanded,true);
-  assert.equal(view.tab,'requests');
-  assert.deepEqual(commands.at(-1),{name:'layout.resize',args:{id:'fixture-panel',px:620}});
-  view.collapse(cx);
-  assert.equal(view.expanded,false);
-  assert.equal(view.tab,'requests');
-  assert.deepEqual(commands.at(-1),{name:'layout.resize',args:{id:'fixture-panel',px:164}});
-  assert.equal(view.controller,controller);
-  assert.equal(controller.enabled,true);
+test('popup settings actions update the existing owner through its mailbox without creating another controller',async()=>{
+  const {owner,controller,cx}=await ownerModel();
+  const {popup}=presentation(owner,cx);
+  assert.equal(await popup.relay({action:'delay',value:5000}),true);
+  assert.equal(state.get('approvals.delay'),5000);
+  assert.equal(controller.delayMs,5000);
+  assert.equal(await popup.relay({action:'mode',value:'remember'}),true);
+  assert.equal(controller.mode,'remember');
+  assert.equal(await popup.relay({action:'scope',value:'selected'}),true);
+  assert.equal(state.get('approvals.scope'),'selected');
+  assert.equal(popup.controller,controller);
+  popup.close();owner.close();
+});
+
+test('closed and replaced popup capabilities cannot apply queued settings or manual actions',async()=>{
+  const {owner,controller,cx}=await ownerModel();
+  const pending=controller.pending;
+  const {popup:closed}=presentation(owner,cx);
+  closed.close();
+  assert.equal(await closed.relay({action:'delay',value:10000}),false);
+  assert.equal(state.has('approvals.delay'),false);
+  const {popup:queued}=presentation(owner,cx);
+  const handle=owner.handlePresentation.bind(owner);
+  let release;
+  const gate=new Promise(resolve=>{release=resolve;});
+  owner.handlePresentation=async(packet,taskContext)=>{await gate;return handle(packet,taskContext);};
+  const acknowledgement=queued.relay({action:'delay',value:10000});
+  await Promise.resolve();
+  queued.close();release();
+  assert.equal(await acknowledgement,false,'revocation must also reject an already queued action');
+  assert.equal(state.has('approvals.delay'),false);
+  owner.handlePresentation=handle;
+  const {popup:old}=presentation(owner,cx);
+  const {popup:current}=presentation(owner,cx);
+  assert.equal(await old.relay({action:'mode',value:'remember'}),false);
+  assert.equal(controller.mode,'once');
   assert.equal(controller.pending,pending);
-  assert.equal(sends,0);
-  assert.deepEqual(await controller.journal.entries(),[],'navigation cannot persist a cancellation or a new attempt');
+  current.close();owner.close();
 });
 
-test('an idle compact widget collapses to 112px while regular tab changes do not resize any layout slot',()=>{
-  check=false;commands.length=0;
-  const controller=new ApprovalController({provider:{id:'native'},journal:new MemoryJournal()});
-  const compact=Object.assign(Object.create(Approvals.prototype),{
-    compact:true,expanded:true,panelId:'fixture-panel',preview:false,tab:'settings',controller,
-  });
-  compact.collapse(context());
-  assert.equal(compact.expanded,false);
-  assert.equal(compact.tab,'requests');
-  assert.deepEqual(commands,[{name:'layout.resize',args:{id:'fixture-panel',px:112}}]);
-
-  commands.length=0;
-  const regular=Object.assign(Object.create(Approvals.prototype),{
-    compact:false,expanded:false,panelId:'regular-panel',preview:false,tab:'requests',controller,
-  });
-  regular.setTab('settings',context());
-  regular.setTab('requests',context());
-  assert.equal(regular.tab,'requests');
-  assert.deepEqual(commands,[]);
+test('presentation input rejects settings and stale request identities but preserves explicit current request actions',async()=>{
+  const model=await ownerModel(),{owner,controller,cx,row}=model;
+  const {popup:settings}=presentation(owner,cx);
+  assert.equal(await settings.relay({action:'submit',...snapshot(row),choice:1}),false);
+  assert.equal(model.sends(),0);
+  const {popup}=presentation(owner,cx,'requests');
+  const original=snapshot(row);
+  row.episode='2';
+  assert.equal(await popup.relay({action:'choose',...original,choice:1}),false);
+  row.episode='1';
+  const question=row.question;
+  row.question={...question,fingerprint:'changed full request'};
+  assert.equal(await popup.relay({action:'choose',...original,choice:1}),false);
+  row.question=question;
+  assert.equal(model.sends(),0);
+  assert.equal(await popup.relay({action:'choose',...snapshot(row),choice:1}),true);
+  assert.equal(await popup.relay({action:'submit',...snapshot(row),choice:1}),true);
+  assert.equal(model.sends(),1);
+  popup.close();owner.close();
 });
 
-test('a collapsed compact widget ignores hidden answer keys and approve commands until expanded',()=>{
-  for(const action of ['enter','approve','digit']){
+test('the thin owner never submits hidden manual choices while the regular request pane keeps its explicit command',()=>{
+  check=false;
+  for(const expanded of [false,true]){
     let sends=0,choices=0;
     const row={sessionKey:'fixture',question:parseCodex(basicPrompt)};
-    const pending={sessionKey:'fixture',choice:1,deadline:3000};
-    const controller={rows:[row],pending,enabled:true};
-    const view=Object.assign(Object.create(Approvals.prototype),{
-      compact:true,expanded:false,tab:'requests',controller,selectedKey:'fixture',choice:1,
-      submit(){sends++;},choose(){choices++;},
-    });
-    const invoke=()=>action==='approve'?view.command('approve',context()):view.key({key:action==='digit'?'3':'enter'},context());
-
-    invoke();
-    assert.equal(sends,0,`${action} must not dispatch a previously selected hidden answer`);
-    assert.equal(choices,0,`${action} must not choose an answer hidden by the compact widget`);
-    assert.equal(controller.enabled,true);
-    assert.equal(controller.pending,pending,'ignoring a hidden manual action does not cancel the automatic countdown');
-
-    view.expanded=true;
-    invoke();
-    assert.equal(sends,action==='digit'?0:1,'expanded requests retain explicit submit actions');
-    assert.equal(choices,action==='digit'?1:0,'expanded requests retain numeric selection');
+    const pending={sessionKey:'fixture',deadline:3000};
+    const view=Object.assign(Object.create(Approvals.prototype),{compact:true,expanded,tab:'requests',controller:{rows:[row],pending,enabled:true},choice:1,selectedKey:'fixture',submit(){sends++;},choose(){choices++;}});
+    view.key({key:'enter'},context());view.key({key:'3'},context());view.command('approve',context());
+    assert.equal(sends,0);assert.equal(choices,0);assert.equal(view.controller.pending,pending);
   }
-});
-
-test('approve commands cannot send a request hidden behind settings in compact or regular panels',()=>{
-  check=false;
-  for(const compact of [false,true]){
-    let sends=0;
-    const row={sessionKey:'fixture',question:parseCodex(basicPrompt)};
-    const view=Object.assign(Object.create(Approvals.prototype),{
-      compact,expanded:true,panelId:'fixture-panel',preview:false,tab:'requests',
-      controller:{rows:[row],pending:null},selectedKey:'fixture',choice:1,
-      submit(){sends++;},
-    });
-    const cx=context();
-
-    view.setTab('settings',cx);
-    view.command('approve',cx);
-    assert.equal(sends,0,compact?'expanded compact settings hide the old approval':'regular settings hide the old approval');
-
-    view.setTab('requests',cx);
-    view.command('approve',cx);
-    assert.equal(sends,1,'the explicit approve command remains available on the visible request tab');
-  }
+  let sends=0;
+  const row={sessionKey:'fixture',question:parseCodex(basicPrompt)};
+  const regular=Object.assign(Object.create(Approvals.prototype),{compact:false,tab:'settings',controller:{rows:[row]},selectedKey:'fixture',choice:1,submit(){sends++;}});
+  regular.command('approve',context());assert.equal(sends,0);
+  regular.tab='requests';regular.command('approve',context());assert.equal(sends,1);
 });

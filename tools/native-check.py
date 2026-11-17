@@ -16,7 +16,7 @@ mutations = {
     'unknown': "this.controller.pending=null;this.controller.status='unknown';this.controller.rows[0].quarantined=true;",
     'compact-pending': 'this.compact=true;',
     'compact-empty': 'this.compact=true;this.controller.rows=[];this.controller.pending=null;',
-    'compact-settings': "this.compact=true;this.expanded=true;this.tab='settings';",
+    'compact-error': "this.compact=true;this.controller.rows=[];this.controller.pending=null;this.controller.error='Fixture connection error';",
 }
 for variant, mutation in mutations.items():
     target=scratch/variant

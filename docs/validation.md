@@ -5,10 +5,11 @@ All prompts and commands in the test fixtures are fictional.
 
 The automated checks cover these behaviors:
 
-- 86 tests cover parsing, command identity, cursor movement, countdowns, cancellation, competing replies, durable claims, and uncertain delivery.
+- 88 tests cover parsing, command identity, cursor movement, countdowns, cancellation, competing replies, durable claims, and uncertain delivery.
 - Agent catalog tests cover selection before a request arrives, inactive selections, and new agents under all or selected scope.
 - Recovery tests discard stale requests after connection errors and preserve durable input records.
 - Shared setting tests stop stale countdowns and prevent hidden replies from the settings tab.
+- Popup tests cover shared controller state, safe setting actions, closed popups, and stale request actions.
 - Native checks render eight full and compact states without input or persistent changes.
 - An isolated core reads a fictional TUI and receives exactly one reply through the actual native provider.
 - Separate preview homes render the default settings and agent picker without Cockpit or input.
