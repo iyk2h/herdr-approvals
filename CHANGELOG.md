@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Add a compact widget with inline settings and request review.
+- Prevent hidden selections from accepting approval commands in settings.
 - Select working and idle Codex agents before a permission request arrives.
 - Clear stored agent selections, including inactive processes.
 - Use concise English throughout the panel and settings.

@@ -16,6 +16,9 @@ export default class Approvals extends View {
   init(options, cx) {
     const p = options ?? props() ?? {};
     this.preview = checking() || Boolean(p.preview);
+    this.compact = p.compact === true;
+    this.expanded = false;
+    this.panelId = typeof p.panelId === 'string' && p.panelId.trim() ? p.panelId : null;
     this.tab = p.tab === 'settings' ? 'settings' : 'requests';
     this.focus = cx.focus_handle();
     this.mode = shared('approvals.mode') === 'remember' ? 'remember' : 'once';
@@ -55,7 +58,7 @@ export default class Approvals extends View {
     cx.timer.after(Math.max(0, pending.deadline - Date.now()), cx => {
       this.syncSettings();
       if (this.closed || this.preview || this.controller.pending !== pending) return;
-      cx.spawn(async cx => { this.busy = true; cx.notify(); try { await this.controller.tick(); } catch (e) { this.error = String(e.message || e); } finally { this.busy = false; cx.notify(); this.schedule(cx); } });
+      cx.spawn(async cx => { this.busy = true; cx.notify(); try { await this.controller.tick(); } catch (e) { this.error = String(e.message || e); } finally { this.busy = false; this.updateCompactSize(cx); cx.notify(); this.schedule(cx); } });
     });
   }
   refresh(cx) {
@@ -82,7 +85,7 @@ export default class Approvals extends View {
         this.sessionCatalog = []; this.selectedKey = null; this.choice = null; this.selection = null;
         this.error = String(e.message || e);
       } finally {
-        if (!this.closed && controller === this.controller) { this.refreshing = false; cx.notify(); }
+        if (!this.closed && controller === this.controller) { this.refreshing = false; this.updateCompactSize(cx); cx.notify(); }
       }
     });
   }
@@ -99,7 +102,19 @@ export default class Approvals extends View {
     if (this.scopeSignature !== undefined && signature !== this.scopeSignature) this.controller.invalidate();
     this.scopeSignature = signature; this.scope = scope; this.selectedSessions = selected;
   }
-  setTab(name, cx) { this.tab = name === 'settings' ? 'settings' : 'requests'; cx.notify(); }
+  updateCompactSize(_cx) {
+    if (!this.compact || !this.panelId || this.preview || this.closed || checking()) return;
+    const size = this.expanded ? 620 : this.controller.pending ? 164 : 112;
+    if (size === this.compactSize) return;
+    this.compactSize = size;
+    run('layout.resize', { id: this.panelId, px: size });
+  }
+  setTab(name, cx) {
+    this.tab = name === 'settings' ? 'settings' : 'requests';
+    if (this.compact) this.expanded = true;
+    this.updateCompactSize(cx); cx.notify();
+  }
+  collapse(cx) { this.expanded = false; this.tab = 'requests'; this.updateCompactSize(cx); cx.notify(); }
   setDelay(ms, cx) { if (this.preview || ![3000, 5000, 10000].includes(ms)) return; setShared('approvals.delay', ms); this.syncSettings(); this.refresh(cx); cx.notify(); }
   setScope(scope, cx) { if (this.preview) return; setShared('approvals.scope', scope === 'selected' ? 'selected' : 'all'); this.syncSettings(); this.refresh(cx); cx.notify(); }
   toggleSession(key, cx) {
@@ -113,9 +128,14 @@ export default class Approvals extends View {
   }
   setMode(mode, cx) { if (this.preview) return; setShared('approvals.mode', mode === 'remember' ? 'remember' : 'once'); this.syncSettings(); this.refresh(cx); cx.notify(); }
   pick(row, cx) { this.controller.cancel(row.sessionKey); this.selectedKey = row.sessionKey; this.choice = null; this.selection = null; cx.notify(); }
+  review(row, cx) {
+    if (this.preview || !row) return;
+    this.controller.cancel(row.sessionKey); this.selectedKey = row.sessionKey; this.choice = null; this.selection = null;
+    this.setTab('requests', cx);
+  }
   choose(row, choice, cx) { if (this.preview || row.quarantined || !row.question.choices.some(item => item.n === choice && !item.free)) return; this.selectedKey = row.sessionKey; this.choice = choice; this.selection = { episode: row.episode, fingerprint: row.question.fingerprint }; this.controller.select(row.sessionKey, choice); cx.notify(); }
-  cancel(cx) { this.controller.cancel(); cx.notify(); }
-  toggle(cx) { if (this.preview) return; const enabled = !this.controller.enabled; setShared('approvals.enabled', enabled); this.controller.setEnabled(enabled); this.refresh(cx); cx.notify(); }
+  cancel(cx) { this.controller.cancel(); this.updateCompactSize(cx); cx.notify(); }
+  toggle(cx) { if (this.preview) return; const enabled = !this.controller.enabled; setShared('approvals.enabled', enabled); this.controller.setEnabled(enabled); this.updateCompactSize(cx); this.refresh(cx); cx.notify(); }
   toggleMode(cx) { if (this.preview || this.busy) return; this.mode = this.mode === 'once' ? 'remember' : 'once'; setShared('approvals.mode', this.mode); this.controller.setMode(this.mode); this.refresh(cx); cx.notify(); }
   switchProvider(cx) {
     if (this.preview || this.busy || this.refreshing || this.controller.rows.length) return;
@@ -132,7 +152,7 @@ export default class Approvals extends View {
     const key = event.keystroke || event.key;
     const row = this.controller.rows.find(item => item.sessionKey === this.selectedKey) ?? this.controller.rows[0];
     if (key === 'escape' || key === 'esc') this.cancel(cx);
-    else if (this.tab === 'settings') return false;
+    else if (this.tab === 'settings' || (this.compact && !this.expanded)) return false;
     else if (row && /^[1-9]$/.test(key)) this.choose(row, Number(key), cx);
     else if (row && key === 'enter') this.submit(row, cx);
     else return false;
@@ -144,7 +164,7 @@ export default class Approvals extends View {
     else if (name === 'cancel') this.cancel(cx);
     else if (name === 'toggle-auto') this.toggle(cx);
     else if (name === 'refresh') this.refresh(cx);
-    else if (name === 'approve' && this.choice !== null) { const row = this.controller.rows.find(item => item.sessionKey === this.selectedKey); if (row) this.submit(row, cx); }
+    else if (name === 'approve' && this.tab === 'requests' && this.choice !== null && (!this.compact || this.expanded)) { const row = this.controller.rows.find(item => item.sessionKey === this.selectedKey); if (row) this.submit(row, cx); }
     cx.notify();
   }
   render(cx) {

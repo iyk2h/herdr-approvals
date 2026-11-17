@@ -154,13 +154,51 @@ function notice(view) {
   return texts[controller.status] ? description(texts[controller.status]) : null;
 }
 
+function compactPanel(view) {
+  const t = theme(), controller = view.controller, rows = controller.rows ?? [], pending = controller.pending;
+  const row = rows.find(item => item.sessionKey === pending?.sessionKey)
+    ?? rows.find(item => item.sessionKey === view.selectedKey) ?? rows[0];
+  const root = v_flex().id('approvals-compact').size_full().min_h(0).min_w(0).p(8).gap(6)
+    .bg(t.background).text_color(t.foreground).text_size(12)
+    .track_focus(view.focus).on_key_down((event, cx) => { if (view.key(event, cx)) cx.stop_propagation(); });
+  root.child(h_flex().min_w(0).items_center().gap(4)
+    .child(div().flex_1().min_w(0).font_semibold().text_size(14).child('Approvals'))
+    .child(button('approvals-compact-auto', controller.enabled ? 'On' : 'Off', cx => view.toggle(cx),
+      { selected: controller.enabled, disabled: view.preview, compact: true, align: 'center' }))
+    .child(button('approvals-compact-settings', 'Settings', cx => view.setTab('settings', cx), { compact: true, align: 'center' })));
+  if (view.preview) root.child(description('Preview · No input'));
+  if (pending) {
+    const seconds = Math.max(0, Math.ceil((pending.deadline - Date.now()) / 1000));
+    root.child(v_flex().min_w(0).gap(3)
+      .child(div().font_medium().child(`Starts in ${seconds} sec`))
+      .child(div().min_w(0).truncate().text_color(t.muted).child(row?.title || row?.address || 'Pending request')));
+    root.child(h_flex().min_w(0).gap(4)
+      .child(button('approvals-compact-cancel', 'Cancel', cx => view.cancel(cx), { compact: true, grow: true, align: 'center', disabled: view.preview }))
+      .child(button('approvals-compact-review', 'Review', cx => view.review(row, cx), { compact: true, grow: true, align: 'center', disabled: view.preview || !row })));
+  } else if (row) {
+    const state = view.busy || controller.busy ? 'Reply in progress'
+      : row.quarantined ? 'Delivery uncertain'
+      : `${rows.length} ${rows.length === 1 ? 'request' : 'requests'} waiting`;
+    root.child(h_flex().min_w(0).items_center().gap(6)
+      .child(div().flex_1().min_w(0).text_color(t.muted).child(state))
+      .child(button('approvals-compact-review', 'Review', cx => view.review(row, cx), { compact: true, disabled: view.preview || view.busy || controller.busy })));
+  } else {
+    root.child(description(view.error || controller.error ? 'Connection needs attention. Open Settings.' : 'Waiting for requests.'));
+    root.child(description(`${(view.delayMs ?? 3000) / 1000} sec · ${view.scope === 'selected' ? 'Selected agents' : 'All agents'}`));
+  }
+  return root;
+}
+
 export function panel(view, cx) {
+  if (view.compact && !view.expanded) return compactPanel(view);
   const t = theme(), controller = view.controller, rows = controller.rows ?? [];
   const row = rows.find(item => item.sessionKey === view.selectedKey) ?? rows[0];
   const activeTab = view.tab === 'settings' ? 'settings' : 'requests';
   const root = v_flex().id('approvals-panel').size_full().min_h(0).min_w(0).p(16).gap(14)
     .bg(t.background).text_color(t.foreground).text_size(13)
     .track_focus(view.focus).on_key_down((event, cx) => { if (view.key(event, cx)) cx.stop_propagation(); });
+  if (view.compact) root.child(h_flex().justify_end()
+    .child(button('approvals-collapse', 'Collapse', cx => view.collapse(cx), { compact: true })));
   root.child(h_flex().min_w(0).items_start().gap(10)
     .child(v_flex().flex_1().min_w(0).gap(3)
       .child(div().text_size(19).font_semibold().child('Approvals'))

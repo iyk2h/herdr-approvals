@@ -64,6 +64,16 @@ For manual placement, set `place` to `none` in `mod.json` before installation.
 Then add a layout block with `content: {mod: "approvals"}`.
 If you use `keys.json`, examine the existing bindings before you copy the entries.
 
+For a compact widget, add this block to a personal layout:
+
+```json
+{"id":"approval-widget","type":"block","size":{"px":112},"content":{"mod":"approvals","props":{"compact":true,"panelId":"approval-widget"}}}
+```
+
+The widget expands to 164px during a countdown. **Settings** and **Review** expand the same widget to 620px.
+**Collapse** restores the small widget and preserves its automatic timer.
+**Review** cancels automatic approval for that request before it opens the command and replies.
+
 ## Cockpit and delivery
 
 Herdr is the default connection.
