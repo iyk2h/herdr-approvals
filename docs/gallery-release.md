@@ -25,6 +25,7 @@ The mod provides these controls:
 - A delay from 1 to 3,600 seconds
 - An independent countdown for each agent
 - Connections through Herdr or an existing local Cockpit installation
+- An update popup with release notes, checksum checks, backups, and preserved settings
 
 When countdowns end, the mod sends replies one at a time.
 Selecting the request count in the strip stops automatic approval for that request.

@@ -20,9 +20,19 @@ The automated checks cover these behaviors:
 - Popup lifecycle tests open and close settings 30 times without replacing the controller or writing input records.
 - Popup sizing tests preserve the controller, popup token, focus, and delay input through empty requests, pending requests, and settings.
 - An isolated native geometry trial checks those states in large and small windows, including 150% zoom. The same popup resizes without input or journal records.
-- Native checks render eleven full and compact states, including terminal input and custom delays, without input or persistent changes.
+- Native checks render fifteen full, compact, and update states, including terminal input and custom delays, without input or persistent changes.
 - An isolated core reads fictional command and terminal input TUIs. Both receive one reply through the native provider after the same seven-second custom countdown.
 - Separate preview homes render the default settings and agent picker without Cockpit or input.
+- Update tests reject stale release callbacks, unofficial files, failed checks, competing installs, and installation during approval work.
+- Archive tests cover checksums, unsafe paths, links, duplicate entries, size limits, complete backups, preserved placement, and rollback.
+- CLI tests cover install receipts, lock ownership, and recovery after a completion record fails to save.
+- Release tests cover matching versions, reproducible archives, complete licenses, and the exclusion of generated and private files.
+
+On 2026-11-18, an isolated native self-update installed a local fixture release through the real update action.
+The installer verified the archive, ran native checks, replaced the mod, and resumed the popup after the source reload.
+The same app process stayed open. Saved settings, the 40px strip, and personal placement survived.
+The previous mod was backed up and obsolete files were removed. The native app reported no errors.
+The trial used local release files and an empty isolated core. It sent no input to agent terminals.
 
 Installation into a scratch Herdr home succeeds.
 Without `--update`, a second installation stops before it overwrites the mod.
@@ -46,11 +56,14 @@ Reproduction commands:
 npm test
 npm run check:package
 npm run check:install
+npm run check:updates
 python3 tools/native-check.py
 python3 tools/popup-smoke.py
 python3 tools/core-spike.py
 python3 tools/preview.py
 python3 tools/preview.py --selected
+python3 tools/preview.py --view updates
+python3 tools/update-smoke.py
 ```
 
 The core test creates its own session and XDG directories.

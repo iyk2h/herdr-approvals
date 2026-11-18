@@ -7,12 +7,14 @@ import { parseCodex } from './parsers/codex.js';
 import { NativeProvider } from './providers/native.js';
 import { CockpitProvider } from './providers/cockpit.js';
 import { ScopedProvider } from './providers/scoped.js';
-import { host, journalHost } from './host.js';
+import { host, journalHost, updateHost } from './host.js';
+import { UpdateController, VERSION } from './updater.js';
 import { cockpitRequest } from './cockpit-client.js';
 import { panel } from './ui.js';
 import { sha256 } from './digest.js';
 import { savedDelay, validDelay, parseDelaySeconds } from './settings.js';
-import { registerOwner, presentation, newPresentation, revokePresentation, relay, publish, removeOwner } from './presentation-registry.js';
+import { registerOwner, presentation, newPresentation, revokePresentation, relay, publish, removeOwner,
+  updateTransaction, ownersIdle, beginUpdate, finishUpdate } from './presentation-registry.js';
 
 const PREVIEW = 'Would you like to run the following command?\n\n  $ pnpm test\n\n❯ 1. Yes, proceed (y)\n  2. Yes, and don\'t ask again for commands that start with `pnpm test`\n  3. No, and tell Codex what to do differently (esc)\n\nPress enter to confirm or esc to cancel';
 
@@ -34,6 +36,8 @@ export default class Approvals extends View {
     this.scope = shared('approvals.scope') === 'selected' ? 'selected' : 'all';
     this.selectedSessions = Array.isArray(shared('approvals.sessions')) ? shared('approvals.sessions').filter(key => typeof key === 'string').slice(0, 40) : [];
     this.choice = null; this.selectedKey = null; this.busy = false; this.closed = false;
+    this.updater = new UpdateController({ host: { latest: () => updateHost.latest(),
+      install: release => updateHost.install(release, this.updateAttempt) }, canInstall: () => this.canUpdate() });
     this.sessionCatalog = [];
     this.makeController();
     if (this.preview) {
@@ -45,14 +49,17 @@ export default class Approvals extends View {
       return;
     }
     this.ensurePresentationOwner(cx);
+    if (updateTransaction()) this.followUpdate(cx);
+    else this.checkUpdates(cx, false);
     this.refresh(cx);
+    cx.timer.every(6 * 60 * 60 * 1000, cx => this.checkUpdates(cx, false));
     cx.timer.every(2000, cx => this.refresh(cx));
     cx.timer.every(1000, cx => { if (this.controller.pending || this.busy) this.changed(cx); });
     cx.spawn(async cx => { while (!this.closed) { const name = await nextCommand(); this.command(name, cx); } });
   }
   initPresentation(p, cx) {
     this.presentation = true; this.ownerId = p.ownerId; this.dialogToken = p.dialogToken;
-    this.tab = p.tab === 'settings' ? 'settings' : 'requests';
+    this.tab = ['settings', 'updates'].includes(p.tab) ? p.tab : 'requests';
     this.overlay = p.overlay; this.closed = false; this.focus = cx.focus_handle();
     const entry = presentation(this.ownerId, this.dialogToken);
     this.owner = entry?.owner;
@@ -120,7 +127,7 @@ export default class Approvals extends View {
   openPopup(tab, cx) {
     if (this.preview || this.closed || checking()) return;
     this.ensurePresentationOwner(cx);
-    const dialog = newPresentation(this.ownerId, tab === 'settings' ? 'settings' : 'requests');
+    const dialog = newPresentation(this.ownerId, ['settings', 'updates'].includes(tab) ? tab : 'requests');
     this.dialogToken = dialog.token;
     if (this.popupId) closeOverlay(this.popupId);
     const viewport = globalThis.window?.viewport_size?.();
@@ -140,6 +147,13 @@ export default class Approvals extends View {
     if (this.closed || this.preview || entry?.owner !== this) return false;
     const { action, value } = packet;
     if (action === 'tab' && ['settings', 'requests'].includes(value)) { entry.dialog.tab = value; return true; }
+    if (action === 'updates' && entry.dialog.tab === 'settings') { this.showUpdates(cx); return true; }
+    if (entry.dialog.tab === 'updates') {
+      if (action === 'check-updates') { this.checkUpdates(cx); return true; }
+      if (action === 'install-update' && value === this.updater?.release?.version) return this.installUpdate(cx, value);
+      if (action === 'settings') { this.openPopup('settings', cx); return true; }
+      return false;
+    }
     if (entry.dialog.tab === 'settings') {
       if (action === 'delay' && validDelay(value)) this.setDelay(value, cx);
       else if (action === 'mode' && ['once', 'remember'].includes(value)) this.setMode(value, cx);
@@ -176,16 +190,23 @@ export default class Approvals extends View {
     this.visibleRequest = this.requestSnapshot(row); this.visibleChoice = owner.choice;
     const snapshots = new Map(owner.controller.rows.map(item => [item, this.requestSnapshot(item)]));
     const choice = owner.choice, enabled = owner.controller.enabled;
+    const reviewedVersion = owner.updater?.release?.version, reviewedUrl = owner.updater?.release?.url;
     const pendingRow = owner.controller.rows.find(item => item.sessionKey === owner.controller.pending?.sessionKey);
     const request = (action, row, extra = {}) => this.relay({ action, ...snapshots.get(row), ...extra });
     return { ...owner, controller: owner.controller, presentation: true, compact: false, tab: this.tab, focus: this.focus,
       delayInput: this.delayInput, delayError: this.delayError, applyDelayInput: cx => this.applyDelayInput(cx),
       preview: this.preview, key: (event, cx) => this.key(event, cx), dismiss: () => this.dismiss(),
+      updatePaused: Boolean(updateTransaction()),
       setTab: (tab, cx) => { this.tab = tab === 'settings' ? 'settings' : 'requests'; this.relay({ action: 'tab', value: this.tab }); cx.notify(); },
       toggle: () => this.relay({ action: 'toggle', value: !enabled }),
       setDelay: value => this.relay({ action: 'delay', value }), setMode: value => this.relay({ action: 'mode', value }),
       setScope: value => this.relay({ action: 'scope', value }), toggleSession: value => this.relay({ action: 'session', value }),
       clearSessions: () => this.relay({ action: 'clear' }), switchProvider: (_cx, value) => this.relay({ action: 'provider', value }),
+      canUpdate: () => owner.canUpdate(), showUpdates: () => this.relay({ action: 'updates' }),
+      checkUpdates: () => this.relay({ action: 'check-updates' }),
+      installUpdate: (_cx, version = reviewedVersion) => this.relay({ action: 'install-update', value: version }),
+      backToSettings: () => this.relay({ action: 'settings' }),
+      openReleaseNotes: cx => { if (!this.preview && reviewedUrl) cx.open_url(reviewedUrl); },
       pick: row => request('pick', row), choose: (row, choice) => request('choose', row, { choice }),
       submit: row => request('submit', row, { choice }), inspect: row => request('inspect', row),
       cancel: () => request('cancel', pendingRow ?? row),
@@ -199,24 +220,24 @@ export default class Approvals extends View {
     const provider = new ScopedProvider(delegate, () => ({ scope: shared('approvals.scope') === 'selected' ? 'selected' : 'all', selectedSessions: Array.isArray(shared('approvals.sessions')) ? shared('approvals.sessions') : [] }));
     this.journal = this.preview ? new MemoryJournal() : new CasJournal(journalHost, 'herdr.approvals.attempts.v1');
     this.controller = new ApprovalController({ provider, journal: this.journal, mode: this.mode, delayMs: this.delayMs });
-    this.controller.setEnabled(!this.preview && shared('approvals.enabled') === true);
+    this.controller.setEnabled(!this.preview && !updateTransaction() && shared('approvals.enabled') === true);
   }
   schedule(cx) {
-    if (this.closed || this.preview || this.busy || this.controller.busy) return;
+    if (this.closed || this.preview || updateTransaction() || this.busy || this.controller.busy) return;
     const pending = this.controller.pending;
     if (!pending || pending === this.scheduled) return;
     this.scheduled = pending;
     cx.timer.after(Math.max(0, pending.deadline - Date.now()), cx => {
       if (this.scheduled === pending) this.scheduled = null;
       this.syncSettings();
-      if (this.closed || this.preview) return;
+      if (this.closed || this.preview || updateTransaction()) return;
       if (this.controller.pending !== pending) { this.schedule(cx); return; }
       if (this.busy || this.controller.busy) return;
       cx.spawn(async cx => { this.busy = true; this.changed(cx); try { await this.controller.tick(); } catch (e) { this.error = String(e.message || e); } finally { this.busy = false; this.updateCompactSize(cx); this.changed(cx); this.schedule(cx); } });
     });
   }
   refresh(cx) {
-    if (this.closed || this.preview || this.refreshing || this.busy) return;
+    if (this.closed || this.preview || updateTransaction() || this.refreshing || this.busy) return;
     this.refreshing = true;
     const controller = this.controller;
     cx.spawn(async cx => {
@@ -245,7 +266,7 @@ export default class Approvals extends View {
   }
   syncSettings(syncInput = true) {
     if (this.preview || this.closed) return;
-    this.controller.setEnabled(shared('approvals.enabled') === true);
+    this.controller.setEnabled(!updateTransaction() && shared('approvals.enabled') === true);
     const mode = shared('approvals.mode') === 'remember' ? 'remember' : 'once';
     if (mode !== this.mode) { this.mode = mode; this.controller.setMode(mode); }
     const delay = savedDelay(shared('approvals.delay'));
@@ -291,7 +312,7 @@ export default class Approvals extends View {
   }
   choose(row, choice, cx) { if (this.preview || row.quarantined || !row.question.choices.some(item => item.n === choice && !item.free)) return; this.selectedKey = row.sessionKey; this.choice = choice; this.selection = { episode: row.episode, fingerprint: row.question.fingerprint }; this.controller.select(row.sessionKey, choice); this.schedule(cx); this.changed(cx); }
   cancel(cx) { this.controller.cancel(); this.updateCompactSize(cx); this.changed(cx); }
-  toggle(cx) { if (this.preview) return; const enabled = !this.controller.enabled; setShared('approvals.enabled', enabled); this.controller.setEnabled(enabled); this.updateCompactSize(cx); this.refresh(cx); this.changed(cx); }
+  toggle(cx) { if (this.preview || updateTransaction()) return; const enabled = !this.controller.enabled; setShared('approvals.enabled', enabled); this.controller.setEnabled(enabled); this.updateCompactSize(cx); this.refresh(cx); this.changed(cx); }
   toggleMode(cx) { if (this.preview || this.busy) return; this.mode = this.mode === 'once' ? 'remember' : 'once'; setShared('approvals.mode', this.mode); this.controller.setMode(this.mode); this.refresh(cx); this.changed(cx); }
   switchProvider(cx) {
     if (this.preview || this.busy || this.refreshing || this.controller.rows.length) return;
@@ -299,7 +320,7 @@ export default class Approvals extends View {
     setShared('approvals.provider', this.connection); this.makeController(); this.refresh(cx); this.changed(cx);
   }
   submit(row, cx) {
-    if (this.preview || this.busy || this.choice === null || !row || row.quarantined) return;
+    if (this.preview || updateTransaction() || this.busy || this.choice === null || !row || row.quarantined) return;
     const current = this.controller.rows.find(item => item.sessionKey === row.sessionKey);
     if (!current || current.quarantined) return;
     const choice = this.choice, selection = this.selection;
@@ -327,14 +348,83 @@ export default class Approvals extends View {
   command(name, cx) {
     if (name === 'focus' || name === 'open') this.focus.focus();
     else if (name === 'settings' || name === 'requests') { this.setTab(name, cx); if (!this.compact) this.focus.focus(); }
+    else if (name === 'updates') this.showUpdates(cx);
     else if (name === 'cancel') this.cancel(cx);
     else if (name === 'toggle-auto') this.toggle(cx);
     else if (name === 'refresh') this.refresh(cx);
     else if (name === 'approve' && this.tab === 'requests' && this.choice !== null && !this.compact) { const row = this.controller.rows.find(item => item.sessionKey === this.selectedKey); if (row) this.submit(row, cx); }
     this.changed(cx);
   }
+  canUpdate() {
+    const transaction = updateTransaction();
+    return !this.preview && !this.closed && !this.busy && !this.refreshing && !this.controller.busy
+      && !this.controller.rows.length && (!transaction || transaction.attempt === this.updateAttempt) && ownersIdle();
+  }
+  showUpdates(cx) {
+    if (this.preview || this.closed) return;
+    this.openPopup('updates', cx);
+    if (this.updater?.phase === 'idle') this.checkUpdates(cx);
+  }
+  backToSettings(cx) { this.openPopup('settings', cx); }
+  openReleaseNotes(cx) { if (!this.preview && this.updater?.release?.url) cx.open_url(this.updater.release.url); }
+  checkUpdates(cx, force = true) {
+    if (this.preview || this.closed || !this.updater || updateTransaction()) return false;
+    cx.spawn(async cx => {
+      const task = this.updater.check({ force });
+      this.changed(cx);
+      await task;
+      if (!this.closed) this.changed(cx);
+    });
+    return true;
+  }
+  installUpdate(cx, version = this.updater?.release?.version) {
+    if (version !== this.updater?.release?.version || !this.canUpdate() || updateTransaction()
+      || !['available', 'error'].includes(this.updater?.phase) || !this.updater?.release?.available) return false;
+    this.ensurePresentationOwner(cx);
+    this.updateAttempt = `${this.ownerId}-${Date.now()}`;
+    if (!beginUpdate(this, this.updater.release, this.updateAttempt)) return false;
+    cx.spawn(async cx => {
+      const task = this.updater.install();
+      this.changed(cx);
+      try { await task; }
+      finally {
+        if (!this.closed && finishUpdate(this.updateAttempt)) {
+          this.syncSettings(); this.refresh(cx); this.changed(cx);
+        }
+      }
+    });
+    return true;
+  }
+  followUpdate(cx) {
+    const transaction = updateTransaction();
+    if (this.preview || this.closed || !transaction) return;
+    this.updater.phase = 'installing'; this.updater.release = transaction.release;
+    cx.spawn(async cx => {
+      let receipt;
+      try { receipt = await updateHost.receipt(); } catch { /* Reload can precede the installer's next receipt. */ }
+      if (this.closed || updateTransaction()?.attempt !== transaction.attempt) return;
+      if (receipt?.attempt === transaction.attempt && receipt.status === 'installed' && receipt.version !== VERSION) {
+        cx.timer.after(750, cx => this.followUpdate(cx));
+        return;
+      }
+      if (receipt?.attempt === transaction.attempt && ['installed', 'error'].includes(receipt.status)) {
+        const installed = receipt.status === 'installed' && receipt.version === VERSION;
+        this.updater.phase = installed ? 'installed' : 'error';
+        this.updater.result = installed ? { version: receipt.version, backup: receipt.backup,
+          ...(typeof receipt.warning === 'string' ? { warning: receipt.warning.slice(0, 2000) } : {}) } : null;
+        this.updater.error = installed ? null : receipt.error || 'The update status is unavailable. Check the installed version.';
+        if (finishUpdate(transaction.attempt)) {
+          this.syncSettings(); this.refresh(cx);
+          if (transaction.popupId) closeOverlay(transaction.popupId);
+          this.openPopup('updates', cx);
+        }
+        this.changed(cx);
+      } else cx.timer.after(750, cx => this.followUpdate(cx));
+    });
+  }
   render(cx) {
     if (this.presentation) return panel(this.presentationView(), cx);
+    this.updatePaused = Boolean(updateTransaction());
     if (!this.preview) {
       this.syncSettings(false);
       const signature = JSON.stringify(agents().map(agent => [agent.address, agent.seq, agent.status]));

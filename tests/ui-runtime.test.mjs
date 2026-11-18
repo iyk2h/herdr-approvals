@@ -703,3 +703,134 @@ test('cancelling the selected request explains that another agent still counts d
   assert.ok(renderedText(view).includes('Other requests continue to count down.'),'cancelling one request cannot imply that automatic approval stopped globally');
   owner.close();
 });
+
+test('checking initializes update state without checking the network or installing files',()=>{
+  check=true;state.clear();io=0;
+  const view=new Approvals(),cx=context();view.init({},cx);
+  assert.equal(view.updater.phase,'idle');
+  assert.equal(view.updater.version,'0.2.0');
+  assert.equal(io,0);
+  view.close();
+});
+
+test('the update popup shows the reviewed version and release notes without approval shortcuts',()=>{
+  check=true;
+  const view=new Approvals(),cx=context();view.init({preview:true},cx);
+  const text=renderedText({...view,presentation:true,tab:'updates',updater:{version:'0.2.0',phase:'available',release:{version:'0.2.1',notes:'- Fixture release note',url:'https://github.com/iyk2h/herdr-approvals/releases/tag/v0.2.1'}},canUpdate:()=>false,dismiss(){}});
+  assert.ok(text.includes('Approval update'));
+  assert.ok(text.includes('0.2.1'));
+  assert.ok(text.includes('Fixture release note'));
+  assert.ok(!text.includes('Select a reply'));
+  view.close();
+});
+
+test('update navigation from a settings popup runs only in its current owner',async()=>{
+  const {owner,cx}=await ownerModel();
+  let opened=0;owner.showUpdates=()=>{opened++;};
+  const {popup}=presentation(owner,cx);
+  assert.equal(await popup.relay({action:'updates'}),true);
+  assert.equal(opened,1);
+  popup.close();owner.close();
+});
+
+test('an update cannot start while a permission request is pending',async()=>{
+  const {owner,cx}=await ownerModel();
+  let installs=0;
+  owner.updater={phase:'available',release:{version:'0.2.1'},install:async()=>{installs++;}};
+  assert.equal(owner.installUpdate(cx),false);
+  assert.equal(installs,0);
+  assert.equal(state.get('approvals.enabled'),true,'an update refusal cannot turn automatic approval off');
+  owner.close();
+});
+
+test('another visible approval copy can block an update and no saved setting is changed',async()=>{
+  const first=await ownerModel();
+  first.owner.ensurePresentationOwner(first.cx);
+  first.controller.invalidate();first.controller.rows=[];
+  assert.equal(first.owner.canUpdate(),true);
+  const second=await ownerModel();
+  second.owner.panelId='another-panel';second.owner.ensurePresentationOwner(second.cx);
+  const before=new Map(state);
+  assert.equal(first.owner.canUpdate(),false,'a sibling pending request must block replacement too');
+  assert.deepEqual(state,before);
+  second.owner.close();first.owner.close();
+});
+
+test('a completed install receipt resumes the reloaded owner and replaces the stale update popup',async()=>{
+  const {beginUpdate,finishUpdate,updateTransaction}=await import('../mods/approvals/presentation-registry.js');
+  const {owner,controller,cx}=await ownerModel();
+  owner.ensurePresentationOwner(cx);controller.invalidate();controller.rows=[];
+  owner.popupId='previous-update-popup';
+  const attempt='fixture-reload';
+  assert.equal(beginUpdate(owner,{version:'0.2.0',available:true,notes:'Fixture changes'},attempt),true);
+  assert.equal(controller.enabled,false);
+  const before=new Map(state),originalRead=globalThis.__approvalHost.readTextFile;
+  globalThis.__approvalHost.readTextFile=async()=>JSON.stringify({attempt,version:'0.2.0',status:'installed',backup:'/fixture/backup'});
+  let replacement;
+  try{
+    replacement=new Approvals();replacement.refresh=()=>{};
+    const nextCx=liveContext();nextCx.timer.every=()=>({cancel(){}});
+    replacement.init({compact:true,panelId:'fixture-panel'},nextCx);
+    await new Promise(resolve=>setImmediate(resolve));
+    assert.equal(updateTransaction(),null);
+    assert.equal(replacement.updater.phase,'installed');
+    assert.equal(replacement.controller.enabled,true);
+    assert.deepEqual(state,before,'update suspension must not rewrite saved approval settings');
+    assert.ok(closedOverlays.includes('previous-update-popup'));
+    assert.equal(overlays.at(-1).props.tab,'updates');
+  }finally{
+    globalThis.__approvalHost.readTextFile=originalRead;
+    finishUpdate(attempt);replacement?.close();owner.close();
+  }
+});
+
+test('a stale popup cannot install a different version than the one it reviewed',async()=>{
+  const {owner,cx}=await ownerModel();
+  owner.ensurePresentationOwner(cx);
+  const {newPresentation}=await import('../mods/approvals/presentation-registry.js');
+  const dialog=newPresentation(owner.ownerId,'updates');
+  let installs=0;owner.updater={release:{version:'0.3.0'}};
+  owner.installUpdate=()=>{installs++;return true;};
+  assert.equal(await owner.handlePresentation({ownerId:owner.ownerId,dialogToken:dialog.token,action:'install-update',value:'0.2.1'},cx),false);
+  assert.equal(installs,0);
+  assert.equal(await owner.handlePresentation({ownerId:owner.ownerId,dialogToken:dialog.token,action:'install-update',value:'0.3.0'},cx),true);
+  assert.equal(installs,1);
+  owner.close();
+});
+
+test('a rendered update action stays bound to the release that the popup showed',async()=>{
+  const {owner,cx}=await ownerModel();
+  owner.updater={phase:'available',version:'0.2.0',release:{version:'0.2.1',available:true,url:'https://github.com/iyk2h/herdr-approvals/releases/tag/v0.2.1'}};
+  const {popup}=presentation(owner,cx);
+  popup.tab='updates';
+  const {newPresentation}=await import('../mods/approvals/presentation-registry.js');
+  const dialog=newPresentation(owner.ownerId,'updates');popup.dialogToken=dialog.token;
+  let installs=0;owner.installUpdate=()=>{installs++;return true;};
+  const stale=popup.presentationView();
+  owner.updater.release={version:'0.3.0',available:true,url:'https://github.com/iyk2h/herdr-approvals/releases/tag/v0.3.0'};
+  assert.equal(await stale.installUpdate(cx),false);
+  assert.equal(installs,0,'an old callback cannot adopt a newer unchecked-for-this-render release');
+  popup.close();owner.close();
+});
+
+test('an old module cannot report failure or finish a successful update before the new module loads',async()=>{
+  const {beginUpdate,finishUpdate,updateTransaction}=await import('../mods/approvals/presentation-registry.js');
+  const {owner,controller,cx}=await ownerModel();
+  owner.ensurePresentationOwner(cx);controller.invalidate();controller.rows=[];
+  owner.updater={version:'0.2.0',phase:'idle'};
+  const attempt='fixture-wait-for-reload';
+  assert.equal(beginUpdate(owner,{version:'0.3.0',available:true,notes:'Fixture'},attempt),true);
+  const originalRead=globalThis.__approvalHost.readTextFile;
+  globalThis.__approvalHost.readTextFile=async()=>JSON.stringify({attempt,version:'0.3.0',status:'installed',backup:'/fixture/backup'});
+  try{
+    owner.followUpdate(cx);
+    await new Promise(resolve=>setImmediate(resolve));
+    assert.equal(updateTransaction()?.attempt,attempt,'the old code must leave finalization to the newly loaded version');
+    assert.equal(owner.updater.phase,'installing');
+    assert.equal(owner.updater.error,undefined);
+    assert.ok(cx.scheduled.some(timer=>timer.ms===750));
+  }finally{
+    globalThis.__approvalHost.readTextFile=originalRead;
+    finishUpdate(attempt);owner.close();
+  }
+});

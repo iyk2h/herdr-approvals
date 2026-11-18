@@ -80,3 +80,30 @@ export function removeOwner(ownerId) {
   entry.actions.close();
   state.owners.delete(ownerId);
 }
+
+export function updateTransaction() { return registry()?.update ?? null; }
+
+export function ownersIdle() {
+  return [...(registry()?.owners.values() ?? [])].every(({ owner }) => owner.closed
+    || (!owner.busy && !owner.refreshing && !owner.controller?.busy && !owner.controller?.ticking
+      && !owner.controller?.rows?.length && !owner.controller?.pendingWrites?.size));
+}
+
+export function beginUpdate(owner, release, attempt) {
+  const state = registry(true);
+  if (state.update || !ownersIdle()) return false;
+  state.update = { attempt, release, popupId: owner.popupId ?? null, startedAt: Date.now() };
+  for (const [id, entry] of state.owners) {
+    entry.owner.controller?.setEnabled(false);
+    publish(id);
+  }
+  return true;
+}
+
+export function finishUpdate(attempt) {
+  const state = registry();
+  if (state?.update?.attempt !== attempt) return false;
+  state.update = null;
+  for (const [id] of state.owners) publish(id);
+  return true;
+}

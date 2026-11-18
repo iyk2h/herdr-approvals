@@ -11,5 +11,7 @@ No runtime dependencies on Cockpit, Node, Rust, or a new daemon.
 - One session uses one provider. Do not fall back to another sender after failure.
 - Keep upstream parser attribution and relevant licenses in NOTICE and LICENSES/.
 - Never commit user settings, tokens, real terminal screens, private paths, or actual sessions.
+- Update checks use curl. Only explicit update installation requires Python 3; approval controls do not.
+- Runtime VERSION and package.json must match. Release archives contain only the mod and its licenses.
 - Use Node's built-in test runner; no installation is needed.
 - Do not modify the user's running Herdr/Cockpit while developing or testing.

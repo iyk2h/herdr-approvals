@@ -66,8 +66,34 @@ Claude, remote agents, authentication prompts, text questions, and checkbox form
 Supported requests include command execution and terminal input, such as Ctrl+C.
 Terminal input requires a complete target, environment, reason, quoted input, and confirmation menu.
 The quoted input must fit on one visible line. Wrapped or incomplete input remains manual.
-Node and Python are development tools. The mod requires neither at runtime.
+Normal approval controls require neither Node nor Python. Update checks use curl. Installation of an update requires Python 3.
 Validation used macOS. Linux is not yet validated.
+
+## Updates
+
+Open **Settings → Updates** to see the installed version and release notes.
+The mod checks GitHub for a stable release at startup and every six hours.
+**Check for updates** starts a fresh check. A failed check does not show **Up to date**.
+An update dot appears beside **Approval** when a newer release is available.
+
+Read the changes. Then select **Update to version**.
+Resolve pending requests before installation. Approval replies pause while the update runs.
+The update keeps the saved automatic setting, agent selection, custom delay, panel placement, and layout.
+Herdr and agent sessions stay open.
+
+<details>
+<summary>View the update popup</summary>
+
+<img src="updates-preview.png" alt="Approval update popup with fictional release notes" width="480">
+
+</details>
+
+Installation requires Python 3, curl, and `herdr-app`.
+The installer downloads only the selected release from this repository and verifies its SHA256 checksum.
+It checks the new mod before and after replacement.
+It saves a complete previous copy in `~/.local/share/herdr-approvals/backups/`.
+If replacement or validation fails, it restores the previous copy.
+No update installs without a click.
 
 ## Install
 
@@ -140,6 +166,8 @@ Development checks use Node 24 and Python 3. No npm dependencies are necessary.
 npm test
 npm run check:package
 npm run check:install
+npm run check:updates
+python3 tools/build-release.py
 python3 tools/native-check.py
 python3 tools/core-spike.py
 python3 tools/preview.py
@@ -148,6 +176,7 @@ python3 tools/preview.py
 During the native check, the mod sends no input and starts no helper process. It makes no persistent changes.
 The core test and preview use separate environments.
 See [validation](docs/validation.md) for coverage and limits.
+See [releasing](docs/releasing.md) for the release package and publication steps.
 
 ## Gallery and license
 

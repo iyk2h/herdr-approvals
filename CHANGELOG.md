@@ -1,6 +1,12 @@
 # Changelog
 
-## Unreleased
+## 0.2.0 - 2026-11-18
+
+- Check for stable releases and show changes in an update popup.
+- Show a small update indicator without changing the compact strip height.
+- Verify release checksums and native checks before installation.
+- Preserve settings and personal panel placement, save a complete backup, and restore a failed update.
+- Pause approval replies during installation and recover update status after a native reload.
 
 - Support complete Codex terminal input approvals with the configured delay and one-time replies.
 - Preserve popup connections when a folder rescan loads a new copy of unchanged code.

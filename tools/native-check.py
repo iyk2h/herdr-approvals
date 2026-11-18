@@ -33,11 +33,15 @@ mutations = {
     'compact-empty': 'this.compact=true;this.controller.rows=[];this.controller.pending=null;',
     'compact-error': "this.compact=true;this.controller.rows=[];this.controller.pending=null;this.controller.error='Fixture connection error';",
     'compact-long': "this.compact=true;this.delayMs=3600000;this.controller.pending.deadline=Date.now()+3600000;",
+    'update-available': "this.updatePreview=true;this.tab='updates';this.updater.phase='available';this.updater.release={version:'0.3.0',available:true,notes:'- Preserve personal placement.\\n- Improve the update popup.',url:'https://github.com/iyk2h/herdr-approvals/releases/tag/v0.3.0'};",
+    'update-current': "this.updatePreview=true;this.tab='updates';this.updater.phase='current';",
+    'update-error': "this.updatePreview=true;this.tab='updates';this.updater.phase='error';this.updater.error='Could not check for updates. Try again.';",
+    'update-installing': "this.updatePreview=true;this.tab='updates';this.updater.phase='installing';",
 }
 for variant, mutation in mutations.items():
     target=scratch/variant
     shutil.copytree(root/'mods/approvals', target, ignore=shutil.ignore_patterns('*.d.ts','jsconfig.json'))
     (target/'main.js').rename(target/'view.js')
-    (target/'main.js').write_text("import Base from './view.js';import {sha256} from './digest.js';import {parseCodex} from './parsers/codex.js';export default class Check extends Base{init(p,cx){if(sha256('abc')!=='ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad')throw new Error('Native digest mismatch');super.init(p,cx);"+mutation+"}}")
+    (target/'main.js').write_text("import Base from './view.js';import {panel} from './ui.js';import {sha256} from './digest.js';import {parseCodex} from './parsers/codex.js';export default class Check extends Base{init(p,cx){if(sha256('abc')!=='ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad')throw new Error('Native digest mismatch');super.init(p,cx);"+mutation+"}render(cx){return this.updatePreview?panel({...this,controller:this.controller,presentation:true,preview:true,canUpdate:()=>false,dismiss(){}},cx):super.render(cx);}}")
     subprocess.run([app,'check',str(target)],check=True,timeout=20)
-print('PASS: actual native runtime digest + eleven full and compact UI states')
+print('PASS: actual native runtime digest + fifteen full, compact, and update UI states')

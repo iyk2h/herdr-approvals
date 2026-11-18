@@ -10,7 +10,7 @@ import time
 
 root = Path(__file__).resolve().parents[1]
 parser = argparse.ArgumentParser()
-parser.add_argument('--view', choices=['all', 'settings', 'requests', 'agents'], default='all')
+parser.add_argument('--view', choices=['all', 'settings', 'requests', 'agents', 'updates'], default='all')
 parser.add_argument('--selected', action='store_true', help='Capture only the agent picker.')
 options = parser.parse_args()
 views = ['agents'] if options.selected else ['settings', 'requests', 'agents'] if options.view == 'all' else [options.view]
@@ -29,6 +29,11 @@ export default class Preview extends Base {
     super.init({...p,preview:true,compact:true},cx);
     if(checking())return;
     if(p.settings){this.controller.rows=[];this.controller.pending=null;}
+    if(p.updates){
+      this.controller.rows=[];this.controller.pending=null;
+      this.updater.phase='available';
+      this.updater.release={version:'0.3.0',available:true,notes:'- Show release notes before installation.\n- Preserve your settings and panel placement.\n- Save a complete backup before replacement.',url:'https://github.com/iyk2h/herdr-approvals/releases/tag/v0.3.0'};
+    }
     if(p.agents){
       this.scope='selected';this.selectedSessions=['preview'];
       this.sessionCatalog.push({...this.sessionCatalog[0],sessionKey:'preview-working',address:'fixture-working',title:'Codex · Build app',status:'working'});
@@ -39,7 +44,7 @@ export default class Preview extends Base {
     this.ensurePresentationOwner(cx);
     cx.spawn(async cx=>{while(!this.closed){
       const name=await nextCommand();
-      if(name==='settings'||name==='requests')this.command(name,cx);
+      if(['settings','requests','updates'].includes(name))this.command(name,cx);
     }});
   }
   render(cx) {
@@ -87,12 +92,12 @@ def capture(view):
     (mod/'main.js').rename(mod/'view.js')
     (mod/'main.js').write_text(driver)
     (mod/'mod.json').write_text('{"place":"none","title":"Approval preview"}')
-    (mod/'host.js').write_text("const blocked=async()=>{throw new Error('Preview host IO is disabled');};export const host={hc:blocked};export const journalHost={read:blocked,write:blocked};export const rpc=blocked;export const cockpitInfo=blocked;")
+    (mod/'host.js').write_text("const blocked=async()=>{throw new Error('Preview host IO is disabled');};export const host={hc:blocked};export const journalHost={read:blocked,write:blocked};export const updateHost={latest:blocked,install:blocked,receipt:blocked};export const rpc=blocked;export const cockpitInfo=blocked;")
     context = scratch/'mods/preview-background'
     context.mkdir()
     (context/'mod.json').write_text('{"place":"none"}')
     (context/'main.js').write_text(background)
-    strip = {'id':'approval-widget','type':'block','size':{'px':40},'content':{'mod':'approvals','props':{'panelId':'approval-widget','agents':view=='agents','settings':view=='settings'}}}
+    strip = {'id':'approval-widget','type':'block','size':{'px':40},'content':{'mod':'approvals','props':{'panelId':'approval-widget','agents':view=='agents','settings':view=='settings','updates':view=='updates'}}}
     backdrop = lambda zone: {'id':'preview-'+zone,'type':'block','size':{'weight':1},'content':{'mod':'preview-background','props':{'zone':zone}}}
     if view == 'settings':
         layout = {'id':'root','type':'row','divider':{'width':1,'color':'border'},'children':[
@@ -100,7 +105,7 @@ def capture(view):
         width, height = 1080, 880
     else:
         layout = {'id':'root','type':'column','children':[backdrop('footer'),strip]}
-        width, height = 540, 800 if view=='requests' else 880
+        width, height = 540, 640 if view=='updates' else 800 if view=='requests' else 880
     (scratch/'layouts').mkdir()
     (scratch/'layouts/approval-preview.json').write_text(json.dumps(layout))
     (scratch/'shared.json').write_text('{"layout":"approval-preview","frame.welcomed":"skipped"}')
@@ -114,7 +119,7 @@ def capture(view):
         return subprocess.run([app,*args],env=env,capture_output=True,text=True,check=True,timeout=20).stdout.strip()
 
     process = None
-    image_name = {'settings':'preview.png','requests':'requests-preview.png','agents':'agents-preview.png'}[view]
+    image_name = {'settings':'preview.png','requests':'requests-preview.png','agents':'agents-preview.png','updates':'updates-preview.png'}[view]
     try:
         with (scratch/'preview.log').open('w') as log:
             process = subprocess.Popen([app],env=env,stdout=log,stderr=log,start_new_session=True)
@@ -131,7 +136,7 @@ def capture(view):
         time.sleep(.4)
         for overlay in json.loads(call('status')).get('overlays',[]):
             call('do','overlay.close',json.dumps({'id':overlay.get('id') if isinstance(overlay,dict) else overlay}))
-        call('do','approvals.requests' if view=='requests' else 'approvals.settings')
+        call('do','approvals.updates' if view=='updates' else 'approvals.requests' if view=='requests' else 'approvals.settings')
         for _ in range(40):
             status = json.loads(call('status'))
             assert not status.get('errors'), status.get('errors')

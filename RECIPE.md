@@ -49,6 +49,17 @@ Both connections share the same input records. The mod does not switch senders a
 If Cockpit already approves these agents, disable its automatic sender before you enable this mod.
 The installer preserves that sender and its settings.
 
+## Updates
+
+**Settings → Updates** shows the installed version and release notes in a popup.
+The mod checks GitHub at startup and every six hours. **Check for updates** starts a fresh check.
+A dot beside **Approval** shows that a newer release is available.
+The person selects **Update to version** to install it.
+Pending requests block installation. Approval replies pause during installation.
+The installer verifies the checksum, checks the native mod, saves a complete backup, and preserves settings and placement.
+A failed replacement or native check restores the previous version. Herdr and agent sessions stay open.
+Installation requires Python 3, curl, and `herdr-app`.
+
 ## Built from
 
 Native GPUI JavaScript builds the controls.
@@ -57,7 +68,8 @@ The parser reads the supported Codex menu. The providers identify local terminal
 
 The mod starts `hc` and `/bin/sh`. The optional connection starts the existing local Cockpit executable.
 The core document saves input and cancellation records. These records contain request digests.
-Node and Python support development and installation. The mod requires neither at runtime.
+Node supports development. Normal approval controls require neither Node nor Python.
+Update checks use curl. Installation of an update requires Python 3.
 
 ## Limits
 

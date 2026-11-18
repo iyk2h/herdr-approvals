@@ -26,6 +26,53 @@ export const journalHost = {
   write: (name, value, version) => rpc('doc.set', { name, value, version }),
 };
 
+const RELEASE_API = 'https://api.github.com/repos/iyk2h/herdr-approvals/releases/latest';
+
+export const updateHost = {
+  async latest() {
+    if (checking()) throw new Error('Update checks are disabled during checking');
+    const result = await exec('curl', ['--silent', '--show-error', '--location', '--proto', '=https',
+      '--proto-redir', '=https', '--max-time', '20', '--max-filesize', '262144',
+      '--header', 'Accept: application/vnd.github+json', '--write-out', '\n%{http_code}', RELEASE_API], { timeout: 25000 });
+    if (result.code !== 0) throw new Error('Could not check for updates. Try again.');
+    const at = result.stdout.lastIndexOf('\n');
+    const status = result.stdout.slice(at + 1).trim();
+    if (status === '404') return null;
+    if (status !== '200') throw new Error(status === '403' || status === '429'
+      ? 'GitHub limited update checks. Try again later.' : 'Could not check for updates. Try again.');
+    return JSON.parse(result.stdout.slice(0, at));
+  },
+  async install(release, attempt) {
+    if (checking()) throw new Error('Updates are disabled during checking');
+    let result;
+    try {
+      result = await exec('python3', [`${appHome()}/mods/approvals/update.py`, '--app-home', appHome(),
+        '--version', release.version, '--attempt', attempt], { timeout: 300000 });
+    } catch {
+      throw new Error('The update did not complete. Python 3, curl, and herdr-app are required.');
+    }
+    let value;
+    try { value = JSON.parse((result.stdout.trim() || result.stderr.trim()).split('\n').pop()); } catch { /* A failed process can stop before it writes a receipt. */ }
+    if (result.code !== 0) throw new Error(value?.error || 'The update failed. Check the installed version.');
+    if (!value || value.version !== release.version || typeof value.backup !== 'string') throw new Error('The update result is unavailable. Check the installed version.');
+    return value;
+  },
+  async receipt() {
+    if (checking()) throw new Error('Update records are disabled during checking');
+    const text = await readTextFile(`${appHome()}/data/approvals-update-result.json`);
+    if (!text || text.length > 16384) return null;
+    let value;
+    try { value = JSON.parse(text); } catch { return null; }
+    if (value?.status === 'installing' && /^[A-Za-z0-9._:-]{1,160}$/.test(value.attempt || '')
+      && /^\d+\.\d+\.\d+$/.test(value.version || '')) {
+      const result = await exec('python3', [`${appHome()}/mods/approvals/update.py`, '--status',
+        '--app-home', appHome(), '--version', value.version, '--attempt', value.attempt], { timeout: 40000 });
+      if (result.code === 0) { try { return JSON.parse(result.stdout.trim()); } catch { return value; } }
+    }
+    return value;
+  },
+};
+
 export async function cockpitInfo() {
   if (checking()) throw new Error('Cockpit IO is disabled during checking');
   const text = await readTextFile(`${appHome()}/cockpit.json`);

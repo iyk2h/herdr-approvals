@@ -39,7 +39,7 @@ function autoToggle(id, view) {
       .child(enabled ? 'ON' : 'OFF'))
     .child(track);
   return button(id, state, cx => view.toggle(cx),
-    { disabled: view.preview, compact: true, align: 'center' }).w(68).flex_none().px(4).py(3);
+    { disabled: view.preview || view.updatePaused, compact: true, align: 'center' }).w(68).flex_none().px(4).py(3);
 }
 
 function setting(name, detail, control) {
@@ -57,7 +57,7 @@ function segmented(id, options, selected, onSelect, disabled) {
 
 function settings(view) {
   const t = theme(), controller = view.controller, rows = controller.rows ?? [], catalog = view.sessionCatalog ?? [];
-  const disabled = view.preview || view.busy;
+  const disabled = view.preview || view.busy || view.updatePaused;
   const body = v_flex().id('approvals-settings').flex_1().min_h(0).min_w(0).gap(20).overflow_y_scrollbar();
   body.child(h_flex().items_start().gap(12)
     .child(v_flex().flex_1().min_w(0).gap(4)
@@ -110,6 +110,15 @@ function settings(view) {
   segmented('approvals-provider', [{ value: 'native', label: 'Herdr' }, { value: 'cockpit', label: 'Cockpit' }],
     view.connection, (value, cx) => { if (value !== view.connection) view.switchProvider(cx, value); }, connectionDisabled)));
   if (rows.length) body.child(description('Resolve pending requests before you change the connection.'));
+  if (view.updater) {
+    body.child(separator()).child(h_flex().min_w(0).items_center().gap(10)
+      .child(v_flex().flex_1().min_w(0).gap(3)
+        .child(label(`Version ${view.updater.version}`))
+        .child(description(view.updatePaused ? 'Update in progress.'
+          : view.updater.phase === 'available' ? `Version ${view.updater.release.version} is available.` : 'Updates and release notes.')))
+      .child(button('approvals-updates', view.updater.phase === 'available' ? 'View update' : 'Updates',
+        cx => view.showUpdates(cx), { compact: true, variant: 'secondary', disabled: view.preview })));
+  }
   if (view.error || controller.error) body.child(description(String(view.error || controller.error)));
   return body;
 }
@@ -189,18 +198,64 @@ function compactPanel(view) {
   const row = rows.find(item => item.sessionKey === pending?.sessionKey)
     ?? rows.find(item => item.sessionKey === view.selectedKey) ?? rows[0];
   const seconds = pending ? Math.max(0, Math.ceil((pending.deadline - Date.now()) / 1000)) : null;
-  const status = view.busy || controller.busy ? 'Sending'
+  const status = view.updatePaused ? 'Updating' : view.busy || controller.busy ? 'Sending'
     : pending ? `${rows.length} · ${seconds}s`
     : view.error || controller.error ? 'Check' : `${rows.length} pending`;
   return h_flex().id('approvals-compact').w_full().h(40).min_h(40).max_h(40).min_w(0).px(8).gap(4).items_center()
     .bg(t.background).text_color(t.foreground).text_size(12)
     .track_focus(view.focus).on_key_down((event, cx) => { if (view.key(event, cx)) cx.stop_propagation(); })
-    .child(div().flex_1().min_w(0).truncate().font_semibold().text_size(13).child('Approval'))
+    .child(h_flex().flex_1().min_w(0).gap(5).items_center()
+      .child(div().min_w(0).truncate().font_semibold().text_size(13).child('Approval'))
+      .when(view.updater?.phase === 'available', el => el.child(div().w(5).h(5).rounded(3).bg(t.accent).flex_none())))
     .child(autoToggle('approvals-compact-auto', view))
     .child(button('approvals-compact-requests', div().min_w(0).truncate().text_size(12).child(status), cx => row ? view.review(row, cx) : view.setTab('requests', cx),
       { compact: true, align: 'center', disabled: view.preview || view.busy || controller.busy }).w(78).flex_none().px(4).py(3))
     .child(button('approvals-compact-settings', div().whitespace_nowrap().child('Settings'), cx => view.setTab('settings', cx),
       { compact: true, align: 'center', disabled: view.preview }).w(64).flex_none().px(4).py(3));
+}
+
+function updatePanel(root, view) {
+  const updater = view.updater;
+  if (!updater) return root.child(description('Open Approval again to check for updates.'));
+  const release = updater.release;
+  const installing = updater.phase === 'installing';
+  const checking = updater.phase === 'checking';
+  const disabled = view.preview || installing || checking;
+  const messages = {
+    idle: 'Check for a new version.', checking: 'Checking for updates…',
+    available: 'A new version is available.', current: 'You are up to date.',
+    unpublished: 'No release is available yet.', installing: 'Updating… Approval replies are paused.',
+    installed: `Updated to ${updater.result?.version ?? updater.version}.`,
+    error: updater.error || 'The update did not complete. Try again.',
+  };
+  root.child(h_flex().items_center().gap(8)
+    .child(description('Installed version'))
+    .child(label(updater.phase === 'installed' ? updater.result?.version ?? updater.version : updater.version)));
+  root.child(description(messages[updater.phase] || messages.idle));
+  const body = v_flex().id('approvals-release-notes').flex_1().min_h(0).min_w(0).gap(8).overflow_y_scrollbar();
+  if (release) {
+    body.child(label(`Herdr Approval ${release.version}`));
+    const lines = (release.notes || 'No release notes are available.').split('\n').map(line => line.trim()).filter(Boolean).slice(0, 80);
+    for (const line of lines) body.child(description(line.replace(/^#{1,6}\s+/, '').replace(/^[-*]\s+/, '• ')));
+  } else body.child(description('Only the Approval mod is updated. Herdr and agent sessions stay open.'));
+  root.child(body);
+  if (updater.phase === 'installed' && updater.result?.backup) root.child(description('The previous version is saved in your Approval backups.'));
+  else if (release?.available && !installing) {
+    root.child(description(view.canUpdate?.()
+      ? 'Your settings and layout are kept. A backup is saved before installation.'
+      : 'Resolve pending requests and wait for current work before you update.'));
+  }
+  if (updater.result?.warning) root.child(description(updater.result.warning));
+  root.child(separator());
+  const footer = h_flex().min_w(0).gap(8).items_center()
+    .child(button('approvals-updates-settings', 'Settings', cx => view.backToSettings(cx), { compact: true, disabled: view.preview || installing }));
+  if (release?.url) footer.child(button('approvals-release-link', 'Release notes', cx => view.openReleaseNotes(cx), { compact: true, disabled: view.preview }));
+  if (release?.available && ['available', 'error'].includes(updater.phase)) {
+    footer.child(button('approvals-install-update', updater.phase === 'error' ? 'Retry update' : `Update to ${release.version}`,
+      cx => view.installUpdate(cx, release.version), { compact: true, variant: 'primary', grow: true, align: 'center', disabled: disabled || !view.canUpdate?.() }));
+  } else footer.child(button('approvals-check-updates', checking ? 'Checking…' : 'Check for updates', cx => view.checkUpdates(cx),
+    { compact: true, variant: 'secondary', grow: true, align: 'center', disabled }));
+  return root.child(footer);
 }
 
 function requestPanel(root, view, row) {
@@ -223,7 +278,7 @@ function popupPanel(view) {
   const t = theme();
   const rows = view.controller?.rows ?? [];
   const row = rows.find(item => item.sessionKey === view.selectedKey) ?? rows[0];
-  const preferredHeight = view.unavailable ? null : view.tab === 'settings' ? 720 : row ? 620 : null;
+  const preferredHeight = view.unavailable ? null : view.tab === 'settings' ? 720 : view.tab === 'updates' ? 520 : row ? 620 : null;
   const root = v_flex().id('approvals-popup').w_full().min_h(0).min_w(0).p(18).gap(14)
     .bg(t.background).text_color(t.foreground).text_size(13)
     .track_focus(view.focus).on_key_down((event, cx) => { if (view.key(event, cx)) cx.stop_propagation(); });
@@ -235,11 +290,12 @@ function popupPanel(view) {
     if (Number.isFinite(viewportHeight) && viewportHeight > 0) root.max_h(Math.max(1, viewportHeight / zoom * 0.85));
   }
   root.child(h_flex().min_w(0).items_center().gap(8)
-    .child(div().flex_1().min_w(0).font_semibold().text_size(17).child(view.tab === 'settings' ? 'Approval settings' : 'Approval requests'))
+    .child(div().flex_1().min_w(0).font_semibold().text_size(17).child(view.tab === 'settings' ? 'Approval settings' : view.tab === 'updates' ? 'Approval update' : 'Approval requests'))
     .child(button('approvals-popup-close', 'Close', () => view.dismiss(), { compact: true, align: 'center' })));
   root.child(separator());
   if (view.unavailable) return root.child(description('This panel is no longer available. Open Approval again.'));
   if (view.preview) root.child(description('Preview · No input'));
+  if (view.tab === 'updates') return updatePanel(root, view);
   if (view.tab === 'settings') return root.child(settings(view));
   return requestPanel(root, view, row);
 }
