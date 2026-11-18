@@ -61,7 +61,7 @@ function settings(view) {
   const body = v_flex().id('approvals-settings').flex_1().min_h(0).min_w(0).gap(20).overflow_y_scrollbar();
   body.child(h_flex().items_start().gap(12)
     .child(v_flex().flex_1().min_w(0).gap(4)
-      .child(label('Auto-approve')).child(description('Allow supported requests after the delay.')))
+      .child(label('Auto-approve')).child(description('Approve requests after the countdown.')))
     .child(autoToggle('approvals-auto', view)));
   body.child(separator());
   const delay = v_flex().min_w(0).gap(8)
@@ -73,7 +73,7 @@ function settings(view) {
     .child(description('sec'))
     .child(button('approvals-apply-delay', 'Apply', cx => view.applyDelayInput(cx), { compact: true, disabled, variant: 'secondary' })));
   delay.child(description(view.delayError || '1–3,600 sec. Press Enter or select Apply.'));
-  body.child(setting('Delay', 'Time to examine the command or cancel.', delay));
+  body.child(setting('Delay', 'Time to review or cancel a request.', delay));
   body.child(setting('Agents', view.scope === 'selected'
     ? 'Only selected Codex agents in Herdr.'
     : 'All local Codex agents in Herdr, including new agents.',
@@ -94,7 +94,7 @@ function settings(view) {
       cx => view.toggleSession(row.sessionKey, cx), { selected: included, disabled, compact: true }));
     }
     if (selected.length) list.child(button('approvals-clear-agents', 'Clear selection', cx => view.clearSessions(cx), { disabled, compact: true }));
-    list.child(description('Other requests remain available for manual replies.'));
+    list.child(description('You can still reply to other requests manually.'));
     body.child(list);
   }
   body.child(setting('Automatic reply', view.mode === 'remember'
@@ -237,13 +237,13 @@ function updatePanel(root, view) {
     body.child(label(`Herdr Approval ${release.version}`));
     const lines = (release.notes || 'No release notes are available.').split('\n').map(line => line.trim()).filter(Boolean).slice(0, 80);
     for (const line of lines) body.child(description(line.replace(/^#{1,6}\s+/, '').replace(/^[-*]\s+/, '• ')));
-  } else body.child(description('Only the Approval mod is updated. Herdr and agent sessions stay open.'));
+  } else body.child(description('This update changes only the Approval mod. Herdr and agent sessions stay open.'));
   root.child(body);
   if (updater.phase === 'installed' && updater.result?.backup) root.child(description('The previous version is saved in your Approval backups.'));
   else if (release?.available && !installing) {
     root.child(description(view.canUpdate?.()
       ? 'Your settings and layout are kept. A backup is saved before installation.'
-      : 'Resolve pending requests and wait for current work before you update.'));
+      : 'Finish pending replies before updating.'));
   }
   if (updater.result?.warning) root.child(description(updater.result.warning));
   root.child(separator());
@@ -294,7 +294,7 @@ function popupPanel(view) {
     .child(button('approvals-popup-close', 'Close', () => view.dismiss(), { compact: true, align: 'center' })));
   root.child(separator());
   if (view.unavailable) return root.child(description('This panel is no longer available. Open Approval again.'));
-  if (view.preview) root.child(description('Preview · No input'));
+  if (view.preview) root.child(description('Preview · Sends no input'));
   if (view.tab === 'updates') return updatePanel(root, view);
   if (view.tab === 'settings') return root.child(settings(view));
   return requestPanel(root, view, row);
@@ -318,7 +318,7 @@ export function panel(view, cx) {
     .child(button('approvals-tab-requests', 'Requests', cx => view.setTab('requests', cx), { selected: activeTab === 'requests', compact: true, grow: true, align: 'center' }))
     .child(button('approvals-tab-settings', 'Settings', cx => view.setTab('settings', cx), { selected: activeTab === 'settings', compact: true, grow: true, align: 'center' })));
   root.child(separator());
-  if (view.preview) root.child(description('Preview · No input'));
+  if (view.preview) root.child(description('Preview · Sends no input'));
   if (activeTab === 'settings') return root.child(settings(view));
   return requestPanel(root, view, row);
 }

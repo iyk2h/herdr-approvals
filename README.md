@@ -1,49 +1,50 @@
 # Herdr Approval
 
-Herdr Approval shows local Codex permission requests in a compact panel. You can reply to each request manually.
+Reply to Codex permission requests in Herdr, manually or on a timer. Choose which agents use automatic approval and how long they wait.
 
-Automatic approval is off by default. When you turn it on, set a delay from 1 to 3600 seconds. Choose all Codex agents or only selected agents. Each agent has its own countdown, and you can cancel it before it ends.
+![Compact Approval bar with its settings popup in a demo layout](preview.png)
 
-![Compact Approval strip with its settings popup in a demo layout](preview.png)
+*The optional compact bar and settings popup. All examples use fictional requests.*
 
-*Compact mode in a demo layout. Settings open in a popup. All requests are fictional.*
+## Install
 
-## Settings
+To let an agent install the mod, give it this instruction:
 
-| Setting | Behavior |
-| --- | --- |
-| Auto-approve | Sends the automatic reply after the delay. |
-| Delay | Select 3, 5, or 10 seconds. For a custom delay, enter 1–3,600 whole seconds. Then select Apply. |
-| Agents | Includes all supported local Codex agents, or only selected agents. |
-| Automatic reply | Allows one request, or saves a command rule that Codex offers. |
-| Connection | Uses Herdr directly, or an existing local Cockpit installation. |
+```text
+Read ~/.config/herdr-app/AGENTS.md, then install the Approval mod from https://github.com/iyk2h/herdr-approvals.
+```
 
-**All agents** includes new local Codex agents in Herdr.
-**Selected agents** lets you select those agents before a request arrives.
-Selection applies to the current terminal process. A new process requires a new selection.
+To install it yourself, run the installer from a copy of this repository:
 
-<details>
-<summary>View agent selection</summary>
+```sh
+python3 tools/install.py
+herdr-app check ~/.config/herdr-app/mods/approvals
+```
 
-<img src="agents-preview.png" alt="Selected agents in the Approval settings popup" width="480">
+The panel opens on the right, 360px wide.
+The installer leaves Cockpit, key bindings, layouts, and saved settings unchanged.
+If the mod folder already exists, the installer stops. Add `--update` to replace the mod.
+With `--update`, the installer saves the previous mod in `~/.local/share/herdr-approvals/backups/`.
+It can replace `mod.json`, so check any changes that you made to that file.
 
-</details>
+### Compact bar
 
-**Allow once** permits the current request.
-**Save command rule** selects a command rule that Codex offers.
-If no supported rule exists, automatic approval selects **Allow once**.
-Automatic approval excludes recognized all-command and bypass options.
-In **Save command rule** mode, multiple rule choices require a manual reply.
-Terminal input approvals always use **Allow once**, including in **Save command rule** mode.
+The 40px bar is optional. To use it, add this block to a personal layout:
 
-## Reply
+```json
+{"id":"approval-widget","type":"block","size":{"px":40},"content":{"mod":"approvals","props":{"compact":true,"panelId":"approval-widget"}}}
+```
+
+The bar keeps its height. **Settings** and the request count open popups.
+To place the full panel yourself, set `place` to `none` in `mod.json`. Then add a layout block with `content: {mod: "approvals"}`.
+If you use the optional `keys.json` bindings, merge them with your existing bindings.
+
+## Reply to a request
 
 Select a numbered reply. Then press Enter or select **Send reply**.
-Selection stops automatic approval for that request.
-In a popup, Esc closes the window.
-In the full panel, Esc stops all current automatic requests. Cancellation sends no rejection.
-**Open agent** shows the terminal.
-Other mods can open a tab with `approvals.settings` or `approvals.requests`. These commands send no reply.
+**Open agent** shows the agent's terminal.
+In the bar, select the request count to read the command and its replies.
+Other mods can open these views with the `approvals.settings` and `approvals.requests` commands. The commands send no reply.
 
 <details>
 <summary>View a request</summary>
@@ -52,32 +53,74 @@ Other mods can open a tab with `approvals.settings` or `approvals.requests`. The
 
 </details>
 
-## Requirements
+## Automatic approval
 
-The mod requires these components:
+Automatic approval is off until you turn it on in **Settings**.
 
-- Herdr desktop with native JavaScript mods and herdr-core 0.1.21 or a compatible version
-- `hc` and `/bin/sh` available to Herdr
-- A local Codex agent.
+| Setting | What it does |
+| --- | --- |
+| Auto-approve | Sends the automatic reply when the delay ends. |
+| Delay | 3, 5, or 10 seconds. For a custom delay, enter 1–3,600 whole seconds and select **Apply**. |
+| Agents | All local Codex agents, or only the agents that you select. |
+| Automatic reply | **Allow once** or **Save command rule**. |
+| Connection | Herdr directly, or an existing local Cockpit installation. |
 
-This mod supports Codex only, and it does not support Claude Code. The Codex approval menu must be in English, but you can chat in any language. The mod is tested on macOS and is not validated on Linux.
-Remote agents are not supported. The mod does not answer authentication prompts, text questions, or checkbox forms.
-Supported requests include command execution and terminal input, such as Ctrl+C.
-Terminal input requires a complete target, environment, reason, quoted input, and confirmation menu.
-The quoted input must fit on one visible line. Wrapped or incomplete input remains manual.
-Normal approval controls require neither Node nor Python. Update checks use curl. Installation of an update requires Python 3.
+**All agents** includes Codex agents that start later.
+With **Selected agents**, you can select an agent before it sends a request.
+A selection lasts for that terminal process. A new process needs a new selection.
+
+<details>
+<summary>View agent selection</summary>
+
+<img src="agents-preview.png" alt="Selected agents in the Approval settings popup" width="480">
+
+</details>
+
+**Allow once** approves only the current request.
+**Save command rule** selects the command rule that Codex offers.
+If Codex offers no supported rule, the mod selects **Allow once**. If Codex offers several rules, you reply manually.
+Automatic replies to terminal input requests, such as Ctrl+C, always use **Allow once**.
+Automatic approval skips the all-command and bypass options that it recognizes.
+
+### Countdowns
+
+Each agent has its own countdown. When several countdowns end together, the mod sends the replies one at a time.
+
+- Selecting a reply or opening the request details stops the automatic reply for that request. Other countdowns continue.
+- Closing the details does not restart the countdown. Closing settings leaves all countdowns running.
+- In the full panel, Esc stops all current automatic replies. In a popup, Esc only closes the popup.
+- Canceling a countdown does not reject the request. You can still reply manually.
+- Changing the delay restarts the countdowns with the new delay.
+
+You can cancel until sending starts. Herdr can still delay delivery after that.
+If the reply status is unknown, check the terminal before replying. The mod stops sending to that terminal process.
+
+## Scope and requirements
+
+- Local Codex agents only. Other agents, such as Claude Code, and remote sessions are not supported.
+- Codex permission menus must be in English. You can chat with Codex in any language.
+- Command execution and terminal input requests. For wrapped or incomplete input requests, reply in the terminal.
+- No replies to authentication prompts, text questions, or checkbox forms.
+- Tested on macOS. Linux is not validated.
+
+The mod needs Herdr desktop with native JavaScript mods and herdr-core 0.1.21 or a compatible version.
+Herdr must be able to run `hc` and `/bin/sh`. Approval controls need neither Node nor Python.
 
 ## Updates
 
-Open **Settings → Updates** to see the installed version and release notes.
-The mod checks GitHub for a stable release at startup and every six hours.
-**Check for updates** starts a fresh check. A failed check does not show **Up to date**.
-An update dot appears beside **Approval** when a newer release is available.
+Open **Settings → Updates** to see the installed version and the release notes.
+The mod uses curl to check GitHub for a stable release at startup and every six hours.
+A dot beside **Approval** shows that a newer release is available. **Check for updates** checks again immediately.
 
-Read the changes. Then select **Update to version**.
-Resolve pending requests before installation. Approval replies pause while the update runs.
-The update keeps the saved automatic setting, agent selection, custom delay, panel placement, and layout.
-Herdr and agent sessions stay open.
+To install, read the changes and select **Update to version**. Nothing installs without that click.
+Pending requests block installation, so reply to them first. Approval replies pause while the update runs.
+Installation needs Python 3, curl, and `herdr-app`.
+
+The updater downloads the selected release from this repository and verifies its SHA256 checksum.
+It checks the new mod and saves a backup in `~/.local/share/herdr-approvals/backups/`.
+If replacement or validation fails, it restores that copy.
+Your settings, agent selection, panel placement, layout, and personal `mod.json` are kept. Herdr and your agent sessions stay open.
+Older installations without **Updates** need one manual update: `python3 tools/install.py --update`.
 
 <details>
 <summary>View the update popup</summary>
@@ -86,100 +129,24 @@ Herdr and agent sessions stay open.
 
 </details>
 
-Installation requires Python 3, curl, and `herdr-app`.
-The installer downloads only the selected release from this repository and verifies its SHA256 checksum.
-It checks the new mod before and after replacement.
-It saves a complete previous copy in `~/.local/share/herdr-approvals/backups/`.
-If replacement or validation fails, it restores the previous copy.
-No update installs without a click.
+## Cockpit
 
-## Install
+The mod connects to Herdr directly by default. You can switch to an existing local Cockpit installation when no request is pending.
+If Cockpit already approves the same agents automatically, turn off its automatic sender before you turn on **Auto-approve**, so that the two do not compete.
 
-For installation by an agent, give it this instruction:
+## Development and license
 
-```text
-Read ~/.config/herdr-app/AGENTS.md, then install the Approval mod from https://github.com/iyk2h/herdr-approvals.
-```
-
-Copy `mods/approvals/` to `~/.config/herdr-app/mods/approvals/`.
-Alternatively, install the mod with Python 3:
-
-```sh
-python3 tools/install.py
-herdr-app check ~/.config/herdr-app/mods/approvals
-```
-
-The panel opens on the right. The installer preserves Cockpit, key bindings, and existing settings.
-If the folder exists, add `--update`.
-Updates save the previous mod in `~/.local/share/herdr-approvals/backups/`.
-The installer prepares the new files before replacement. Copy errors leave the installed mod unchanged.
-Successful updates remove obsolete files.
-
-For manual placement, set `place` to `none` in `mod.json` before installation.
-Then add a layout block with `content: {mod: "approvals"}`.
-If you use `keys.json`, examine the existing bindings before you copy the entries.
-
-For a compact widget, add this block to a personal layout:
-
-```json
-{"id":"approval-widget","type":"block","size":{"px":40},"content":{"mod":"approvals","props":{"compact":true,"panelId":"approval-widget"}}}
-```
-
-The strip stays 40px high in all states. **Settings** opens a popup.
-Select the request count to read the command and replies.
-This action stops automatic approval for that request. Closing details does not restart that request.
-Closing settings preserves the automatic timer.
-Popups are up to 480px wide. An empty request popup fits its content.
-Requests use up to 620px in height. Settings use up to 720px.
-Smaller windows limit the height. Long content scrolls inside the popup.
-
-Each agent has its own countdown. Requests found together count down together.
-When countdowns end, the mod sends replies one at a time. Each request uses its original deadline.
-Review or cancellation for one request leaves the other countdowns running.
-The global cancel command stops all current automatic requests.
-Changing the delay starts fresh countdowns with the new duration.
-
-## Cockpit and delivery
-
-Herdr is the default connection.
-When no request is pending, you can change the connection.
-If a connection fails, the mod does not switch senders.
-
-If Cockpit already approves these agents, disable its automatic sender before you enable this mod.
-The installer preserves that sender.
-
-The countdown ends at dispatch. Herdr core can delay delivery.
-After dispatch starts, cancellation is no longer possible. External input can still change the prompt before delivery.
-If delivery is uncertain, the mod stops input to that terminal process.
-
-Panel copies in the same Herdr home share settings. Copies on the same core share input records.
-The records contain no command or question text.
-See [design](docs/design.md) for delivery and recovery details.
-
-## Development
-
-Development checks use Node 24 and Python 3. No npm dependencies are necessary.
+Development checks use Node 24 and Python 3, with no npm dependencies.
 
 ```sh
 npm test
 npm run check:package
 npm run check:install
 npm run check:updates
-python3 tools/build-release.py
 python3 tools/native-check.py
-python3 tools/core-spike.py
-python3 tools/preview.py
 ```
 
-During the native check, the mod sends no input and starts no helper process. It makes no persistent changes.
-The core test and preview use separate environments.
-See [validation](docs/validation.md) for coverage and limits.
-See [releasing](docs/releasing.md) for the release package and publication steps.
+See [design](docs/design.md), [validation](docs/validation.md), and [releasing](docs/releasing.md) for details.
 
-## Gallery and license
-
-The repository uses the `herdr-mod` topic for the [Herdr gallery](https://herdr.dev/gallery/?type=mods).
-
-Apache-2.0 permits use, modification, and distribution under its terms.
-The parser retains attribution to Cockpit and herdr-relevo.
+Apache-2.0. The Codex prompt parser is adapted from Cockpit and herdr-relevo, with attribution retained.
 See [LICENSE](LICENSE), [NOTICE](NOTICE), and [LICENSES](LICENSES/).

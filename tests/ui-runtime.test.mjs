@@ -6,6 +6,7 @@ import { MemoryJournal } from '../mods/approvals/state.js';
 import { parseCodex } from '../mods/approvals/parsers/codex.js';
 import { basicPrompt } from './fixtures/prompts.mjs';
 import { sha256 } from '../mods/approvals/digest.js';
+import { VERSION } from '../mods/approvals/version.js';
 
 const state=new Map();const commands=[];const overlays=[];const closedOverlays=[];let io=0;let check=true;
 globalThis.__approvalElement=()=>new Proxy({}, {get:(_target,key)=>key==='then'?undefined:(...args)=>globalThis.__approvalElement()});
@@ -708,7 +709,7 @@ test('checking initializes update state without checking the network or installi
   check=true;state.clear();io=0;
   const view=new Approvals(),cx=context();view.init({},cx);
   assert.equal(view.updater.phase,'idle');
-  assert.equal(view.updater.version,'0.2.0');
+  assert.equal(view.updater.version,VERSION);
   assert.equal(io,0);
   view.close();
 });
@@ -762,10 +763,10 @@ test('a completed install receipt resumes the reloaded owner and replaces the st
   owner.ensurePresentationOwner(cx);controller.invalidate();controller.rows=[];
   owner.popupId='previous-update-popup';
   const attempt='fixture-reload';
-  assert.equal(beginUpdate(owner,{version:'0.2.0',available:true,notes:'Fixture changes'},attempt),true);
+  assert.equal(beginUpdate(owner,{version:VERSION,available:true,notes:'Fixture changes'},attempt),true);
   assert.equal(controller.enabled,false);
   const before=new Map(state),originalRead=globalThis.__approvalHost.readTextFile;
-  globalThis.__approvalHost.readTextFile=async()=>JSON.stringify({attempt,version:'0.2.0',status:'installed',backup:'/fixture/backup'});
+  globalThis.__approvalHost.readTextFile=async()=>JSON.stringify({attempt,version:VERSION,status:'installed',backup:'/fixture/backup'});
   let replacement;
   try{
     replacement=new Approvals();replacement.refresh=()=>{};

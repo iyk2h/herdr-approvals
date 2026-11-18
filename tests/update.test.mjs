@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { VERSION, isNewer, parseRelease, UpdateController } from '../mods/approvals/updater.js';
 
 const repo = 'https://github.com/iyk2h/herdr-approvals';
@@ -29,7 +30,7 @@ function refuses(payload) {
 }
 
 test('the updater identifies its release and compares numeric stable versions', () => {
-  assert.equal(VERSION, '0.2.0');
+  assert.equal(VERSION, JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version);
   assert.equal(isNewer('0.10.0', '0.9.9'), true);
   assert.equal(isNewer('v1.0.0', '0.99.99'), true);
   assert.equal(isNewer('0.2.0', 'v0.2.0'), false);

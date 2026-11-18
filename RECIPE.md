@@ -1,76 +1,43 @@
 # Herdr Approval
 
-Answer Codex permission requests from a compact panel in Herdr. Reply manually, or turn on automatic approval after a delay that you set. Each agent has its own countdown, and you can cancel it before it ends. Automatic approval is off by default.
+Reply to Codex permission requests in Herdr. Use manual replies or automatic approval with a delay. Each agent has a timer you can cancel. Automatic approval is off by default.
 
-![Compact Approval strip with its settings popup in a demo layout](preview.png)
+![Compact Approval bar with its settings popup in a demo layout](preview.png)
 
-By default, the mod opens in a 360px right panel. It uses the active Herdr theme.
-**Requests** shows the requested action, numbered replies, and an automatic approval countdown.
-**Settings** controls automatic approval, delay, agents, the automatic reply, and the connection.
+## Install
 
-You can add a 40px strip through a personal layout. Its height stays fixed.
-Settings and request details open in popups, at up to 480px wide.
-An empty request popup fits its content. Requests use up to 620px in height. Settings use up to 720px.
-Smaller windows limit the height. Long content scrolls inside the popup.
+Read `~/.config/herdr-app/AGENTS.md` first. Then copy `mods/approvals/` into the Herdr mod folder, or run `python3 tools/install.py`.
+If the mod already exists, use **Settings → Updates**. Older versions without update controls need `python3 tools/install.py --update`.
 
-## Reply
+The default panel opens on the right, 360px wide. The optional 40px bar uses a personal layout, with settings and requests in popups.
+See the [README](README.md) for the layout block and key bindings.
 
-Select a reply. Then press Enter.
-In a popup, Esc closes the window.
-In the full panel, Esc stops all current automatic requests.
-Selection stops that request's countdown. Other agents continue counting down.
-Cancellation does not reject the request. The global cancel command stops all current countdowns.
+## Use
 
-## Automatic approval
+Select a numbered reply. Then press Enter or select **Send reply**.
+To approve requests automatically, turn on **Auto-approve** in **Settings**. Set a delay from 1 to 3,600 seconds.
+Choose all local Codex agents or selected agents. All agents includes new agents; individual selections last for the current terminal process.
 
-Automatic approval is off by default.
-You can include all supported local Codex agents or select agents before a request arrives.
-The **All agents** setting includes new local Codex agents in Herdr.
-A selection applies to the current terminal process. A new process requires a new selection.
+**Allow once** approves the current request. **Save command rule** selects a command rule that Codex offers.
+Automatic approval falls back to **Allow once** if no supported rule exists. Multiple rule choices require a manual reply.
+Automatic replies to terminal input requests always use **Allow once**. The mod skips recognized all-command and bypass options.
 
-The mod supports local Codex command and terminal input permission menus in English.
-Terminal input approvals use the current delay and always allow once.
-The target, environment, reason, quoted input, and confirmation menu must be complete.
-Wrapped input remains manual.
-**Allow once** permits one request. **Save command rule** selects a command rule that Codex offers.
-If no supported rule exists, automatic approval selects **Allow once**.
-Automatic approval excludes recognized all-command and bypass options.
-In **Save command rule** mode, multiple rule choices require a manual reply.
+Each agent has its own countdown. Replies go out one at a time when their countdowns end.
+Opening request details stops that request's countdown. Closing settings leaves countdowns running.
+Canceling sends no rejection. Once sending starts, you cannot cancel the reply.
+If delivery is uncertain, check the terminal before replying. The mod stops sending to that terminal process.
 
-## Connection
+## Connection and support
 
-The default connection uses Herdr directly. The optional Cockpit connection uses an existing local installation.
-Both connections share the same input records. The mod does not switch senders after a failed connection.
+Herdr is the default connection. Cockpit is optional and uses an existing local installation.
+If Cockpit already approves the same agents automatically, turn off its automatic sender first.
 
-If Cockpit already approves these agents, disable its automatic sender before you enable this mod.
-The installer preserves that sender and its settings.
+The mod supports local Codex permission menus in English. Chat messages can use any language.
+Claude Code, remote agents, authentication prompts, text questions, and checkbox forms are not supported.
+Native UI tests use macOS. Linux native UI is untested.
 
-## Updates
+Approval controls need `hc` and `/bin/sh`, with no Node or Python requirement. Update checks use curl.
+Update installation needs Python 3, curl, and `herdr-app`. It checks the release checksum, saves a backup, and keeps settings and personal placement.
+Herdr and agent sessions stay open during updates.
 
-**Settings → Updates** shows the installed version and release notes in a popup.
-The mod checks GitHub at startup and every six hours. **Check for updates** starts a fresh check.
-A dot beside **Approval** shows that a newer release is available.
-The person selects **Update to version** to install it.
-Pending requests block installation. Approval replies pause during installation.
-The installer verifies the checksum, checks the native mod, saves a complete backup, and preserves settings and placement.
-A failed replacement or native check restores the previous version. Herdr and agent sessions stay open.
-Installation requires Python 3, curl, and `herdr-app`.
-
-## Built from
-
-Native GPUI JavaScript builds the controls.
-`mods/approvals/main.js` owns the controller. `ui.js` builds the strip, panel, and popup.
-The parser reads the supported Codex menu. The providers identify local terminal processes and read each request again before input.
-
-The mod starts `hc` and `/bin/sh`. The optional connection starts the existing local Cockpit executable.
-The core document saves input and cancellation records. These records contain request digests.
-Node supports development. Normal approval controls require neither Node nor Python.
-Update checks use curl. Installation of an update requires Python 3.
-
-## Limits
-
-The countdown ends at dispatch. Core can delay delivery. After dispatch, cancellation is no longer possible.
-If delivery is uncertain, the mod stops input to that terminal process.
-Remote agents and other permission formats do not accept input through this version.
-
-See [README](README.md) for installation and [validation](docs/validation.md) for test coverage.
+See [design](docs/design.md) for implementation details and [validation](docs/validation.md) for test coverage.

@@ -1,40 +1,22 @@
 # Changelog
 
+## 0.2.1 - 2026-11-18
+
+- Shorten setup instructions and separate compatibility details from the gallery introduction.
+- Clarify settings, preview, and update messages.
+- Consolidate outdated review notes into the design and validation documents.
+
 ## 0.2.0 - 2026-11-18
 
-- Check for stable releases and show changes in an update popup.
-- Show a small update indicator without changing the compact strip height.
-- Verify release checksums and native checks before installation.
-- Preserve settings and personal panel placement, save a complete backup, and restore a failed update.
-- Pause approval replies during installation and recover update status after a native reload.
-
-- Support complete Codex terminal input approvals with the configured delay and one-time replies.
-- Preserve popup connections when a folder rescan loads a new copy of unchanged code.
-- Open settings from the sidebar and keep the empty request popup focused on request status.
-- Fit empty request popups to their content and resize the same popup when requests change.
-- Lock current request controls immediately after uncertain delivery.
-- Ignore manual reply shortcuts and old callbacks for locked requests.
-- Publish backup directories only after the backup copy completes.
-- Prepare complete updates before replacement, preserve backups, and remove obsolete files.
-- Preserve global cancellation between policy changes and request refreshes.
-- Synchronize saved delay values without replacing unsaved text or applying stale values.
-- Bind reply notices to the matching agent and request.
-- Add isolated installer checks to CI and require Node 24 for development.
-- Keep settings tall and limit popup dimensions to the available window size.
-- Clarify cancellation, command rules, and the limits of platform validation.
-- Set a custom delay from 1 to 3,600 seconds and count down requests independently.
-- Keep the compact strip at 40px and show settings and request details in popups.
-- Prevent hidden selections from accepting approval commands in settings.
-- Select working and idle Codex agents before a permission request arrives.
-- Clear stored agent selections, including inactive processes.
-- Use concise English throughout the panel and settings.
-- Explain automatic replies and optional Cockpit connections.
-- Recover from connection errors without stale requests or lost input records.
-- Add native agent selection previews and regression coverage.
+- Add in-app updates with release notes, checksum checks, backups, and rollback.
+- Keep settings and personal panel placement during in-app updates.
+- Add a 40px bar with settings and request details in popups.
+- Add custom delays from 1 to 3,600 seconds and independent countdowns for agents.
+- Support one-time terminal input approvals.
+- Fix popup reloads, cancellation, and controls after unknown delivery.
 
 ## 0.1.0
 
-- Standalone local Codex approval panel with optional Cockpit connection.
-- Manual answers, three-second automatic countdown, cancellation and scope choice.
-- Saved input records prevent competing replies and stop further mod input after uncertain delivery.
-- Regression tests, native UI checks, and isolated core tests.
+- Add a local Codex approval panel with optional Cockpit connection.
+- Support manual replies, a three-second automatic countdown, cancellation, and agent selection.
+- Save input records to prevent duplicate replies after uncertain delivery.

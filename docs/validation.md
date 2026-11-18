@@ -1,71 +1,33 @@
-# Validation
+# Tests and validation
 
-Validation used macOS, Herdr app 0.1.16, herdr-core 0.1.21, and Node 24.
-All prompts and commands in the test fixtures are fictional.
+Native trials use macOS, Herdr app 0.1.16, and herdr-core 0.1.21. CI runs the Node and Python checks on Linux. Prompts and commands in fixtures are fictional; they do not execute real Codex commands.
 
-The automated checks cover these behaviors:
+| Check | Coverage |
+| --- | --- |
+| `npm test` | Prompt parsing, request identity, cursor movement, individual timers, cancellation, durable claims, popup ownership, and update state |
+| `npm run check:install` | Fresh installs, backups, obsolete files, interrupted copies, and existing user settings |
+| `npm run check:updates` | Archive paths, checksums, version matching, rollback, locks, install receipts, and reproducible release packages |
+| `npm run check:package` | Required files, source attribution, credentials, and runtime dependencies |
+| `python3 tools/native-check.py` | Native full-panel, compact-bar, settings, request, error, and update views |
+| `python3 tools/core-spike.py` | Actual input delivery to two fictional terminals in a separate core |
+| `python3 tools/update-smoke.py` | Actual file replacement and source reload in a separate Herdr app |
 
-- Tests cover parsing, command identity, cursor movement, countdowns, cancellation, competing replies, durable claims, and uncertain delivery.
-- Terminal input tests bind the target, escaped input, environment, and reason. They check the delay, fresh cursor, cancellation, uncertain delivery, and one-time replies in both approval modes.
-- Agent catalog tests cover selection before a request arrives, inactive selections, and new agents under all or selected scope.
-- Recovery tests discard stale requests after connection errors and preserve durable input records.
-- Shared setting tests stop stale countdowns and prevent hidden replies from the settings tab.
-- Popup tests cover shared controller state, safe setting actions, closed popups, and stale request actions.
-- Separate module revisions share the mounted owner's mailbox. Replacing a sidebar retires its previous popup capabilities.
-- An isolated native popup trial reproduces a parent-folder rescan, then checks settings actions, popup replacement, and source reloads without agent input.
-- Cancellation tests include the interval between a policy change and the next request refresh.
-- Delay input tests preserve unsaved text and prevent stale Apply actions from replacing an external setting change.
-- Request notices use the matching agent, episode, and command identity.
-- Uncertain delivery immediately locks the matching request, including manual shortcuts and old callbacks.
-- Popup lifecycle tests open and close settings 30 times without replacing the controller or writing input records.
-- Popup sizing tests preserve the controller, popup token, focus, and delay input through empty requests, pending requests, and settings.
-- An isolated native geometry trial checks those states in large and small windows, including 150% zoom. The same popup resizes without input or journal records.
-- Native checks render fifteen full, compact, and update states, including terminal input and custom delays, without input or persistent changes.
-- An isolated core reads fictional command and terminal input TUIs. Both receive one reply through the native provider after the same seven-second custom countdown.
-- Separate preview homes render the default settings and agent picker without Cockpit or input.
-- Update tests reject stale release callbacks, unofficial files, failed checks, competing installs, and installation during approval work.
-- Archive tests cover checksums, unsafe paths, links, duplicate entries, size limits, complete backups, preserved placement, and rollback.
-- CLI tests cover install receipts, lock ownership, and recovery after a completion record fails to save.
-- Release tests cover matching versions, reproducible archives, complete licenses, and the exclusion of generated and private files.
+## Native trials
 
-On 2026-11-18, an isolated native self-update installed a local fixture release through the real update action.
-The installer verified the archive, ran native checks, replaced the mod, and resumed the popup after the source reload.
-The same app process stayed open. Saved settings, the 40px strip, and personal placement survived.
-The previous mod was backed up and obsolete files were removed. The native app reported no errors.
-The trial used local release files and an empty isolated core. It sent no input to agent terminals.
+On 2026-11-17, the native and Cockpit connections each delivered one allow-once reply after a three-second delay. Cancellation trials waited through the full ten-second delay and received no input. A separate core trial gave two fictional terminals the same seven-second deadline; each received one reply.
 
-Installation into a scratch Herdr home succeeds.
-Without `--update`, a second installation stops before it overwrites the mod.
-Installer checks cover saved backups, obsolete file removal, and interrupted copies.
-An interrupted backup copy leaves no incomplete backup and preserves earlier backups.
-The installer leaves keys, layouts, Cockpit, and shared settings unchanged.
+Popup trials checked repeated opening and closing, parent-folder rescans, request changes, and source reloads. Geometry checks used large and small windows and 150% zoom. Closing settings kept the controller and its deadline; stale popup actions could not send input.
 
-Live trials on 2026-11-17 used fictional agent terminals in the installed Herdr app.
-Both connections delivered one allow-once reply after a configured three-second delay.
-Cancellation trials used a ten-second delay. Both connections received no input after cancellation and the full delay.
-The compact widget also completed the native delivery trial.
+On 2026-11-18, a native self-update installed a local fixture release through the actual update action. The app process stayed open. The new owner showed the completion popup after source reload. Settings, personal placement, and the 40px bar survived; the previous mod was backed up and obsolete files were removed. Herdr reported no errors.
 
-The fixtures do not execute a real Codex command.
-These trials do not establish support for every Codex version.
-Unit tests mock Cockpit delivery. The live trial used the actual Cockpit CLI.
-External input can still change the prompt after dispatch validation.
+## Limits
 
-Reproduction commands:
+Native UI trials cover macOS. Linux native UI remains untested. The fixtures cover recognized English Codex menus, not every Codex version or prompt format. Core can delay key delivery, and external input can change a prompt after the final check.
+
+The core and update tools use separate sessions and app homes and stop only their own processes. Preview tools disable input and host IO.
 
 ```sh
-npm test
-npm run check:package
-npm run check:install
-npm run check:updates
-python3 tools/native-check.py
-python3 tools/popup-smoke.py
-python3 tools/core-spike.py
 python3 tools/preview.py
-python3 tools/preview.py --selected
 python3 tools/preview.py --view updates
-python3 tools/update-smoke.py
+python3 tools/popup-smoke.py
 ```
-
-The core test creates its own session and XDG directories.
-It stops only that core after the test.
-The preview tools use fictional agent metadata and a separate Herdr home.

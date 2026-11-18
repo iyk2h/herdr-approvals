@@ -1,52 +1,35 @@
 # Design
 
-The compact strip owns one controller. Passive popups use the same controller through a presentation registry.
-Popup actions enter a mailbox. The owner processes them in its own task context.
-Closing a popup revokes its token and preserves the automatic timer.
-Request identities reject stale choices. The strip keeps the same height in every state.
+## One input owner
 
-The native provider is the default connection. Cockpit is an optional connection.
-Both connections use the same terminal identity and input records.
-If a connection fails, the controller does not switch senders.
+The bar or side panel owns the approval controller. Popups share that controller through a presentation registry. Popup actions go through a mailbox so the owner handles them in its own task context. Closing a popup revokes its token without replacing the controller.
 
-The agent catalog includes live local Codex agents, including agents with no permission request.
-The request queue includes only recognized permission requests.
-This separation lets a user select an agent before it requests permission.
-The setting for all agents includes future local Codex agents. Individual selections use the current terminal process identity.
+The native and Cockpit connections use the same terminal identity and input records. A failed connection does not switch to another sender. Cockpit's own automatic sender does not share these records and must be disabled when it would answer the same agents.
 
-The parser keeps the full command and reply descriptions in the request fingerprint.
-Terminal input identities include the target terminal, escaped input, environment, and reason.
-Input approvals always allow once. The mod answers the Codex menu; it does not send the displayed payload itself.
-Cursor position stays separate. The latest cursor determines the required arrow keys.
-Only exact agent aliases and recognized permission menus qualify for input.
-Authentication prompts, text questions, and missing process metadata do not qualify.
+## Requests and timers
 
-The controller handles manual and automatic replies through one dispatch path.
-Each request has an independent deadline. Due requests share one serial dispatcher.
-Cancelling one session invalidates only that session's automatic request.
-Global cancellation and policy changes invalidate all affected deadlines and in-flight validation.
-Delay values use whole seconds from 1 to 3,600. Invalid values do not change saved settings.
-The controller saves a durable claim before input. The claim uses compare-and-set writes in a core document.
-A cancellation record stops automatic input. An explicit manual reply remains possible before dispatch.
+The agent catalog includes live local Codex agents before they request permission. The request queue contains only recognized permission menus. Individual selections use the current terminal process identity; the all-agents setting includes new agents.
 
-The journal contains at most 512 records.
-It preserves uncertain attempts. If the journal is full, new claims stop.
-An uncertain delivery blocks input to the same terminal process, even if the prompt or foreground process changes.
-A new root process has a new identity.
+A request fingerprint contains the full command and reply descriptions. Terminal input fingerprints also contain the target, escaped input, environment, and reason. The mod answers Codex's menu rather than sending the displayed terminal input itself. It reads the current cursor before choosing arrow keys.
 
-Panel copies in the same Herdr home share settings. Copies on the same core share input records.
-Other tools and Cockpit automatic senders do not share these records.
-If Cockpit already approves these agents, disable its automatic sender before you enable this mod.
+Each request has its own deadline. Replies use one serial dispatcher, so simultaneous deadlines do not add a fresh delay to each reply. Canceling one request leaves the other deadlines intact. Global cancellation and policy changes invalidate affected deadlines and in-flight validation.
 
-Core cannot condition input on a request identity. Core also cannot withdraw input after dispatch.
-Before dispatch, the controller reads the prompt again. External input can still change the prompt before delivery.
-The UI shows separate countdown, dispatch, and uncertain delivery states.
+## Input records
 
-Cancellation takes effect immediately in memory. The controller saves a cancellation record asynchronously.
-`controller.flush()` acknowledges the durable write.
-A hard crash before that acknowledgement can lose the cancellation.
-Question and command text remain in memory. Durable records contain their digest.
+The controller saves a claim with a compare-and-set write before sending input. The journal holds up to 512 records and preserves uncertain attempts. If it fills, new claims stop. An uncertain attempt blocks further input to that terminal process; a new root process has a new identity.
 
-The runtime uses native GPUI JavaScript, `/bin/sh`, and `hc`.
-Node and Python are development and installation tools.
-Tests use fictional prompts, mock providers, native controls, and an isolated core.
+Cancellation takes effect in memory immediately. Its durable record is saved asynchronously, and `controller.flush()` waits for that write. A hard crash before the write completes can lose the cancellation. Records contain request digests rather than question or command text.
+
+## Delivery limits
+
+The controller checks the request again before sending. Herdr core cannot make delivery conditional on that request identity or withdraw input after dispatch. External input can still change the prompt before queued keys reach it. Countdown, sending, and unknown delivery therefore have separate UI states.
+
+## Updates
+
+Stable releases contain the mod and its licenses in a checksummed ZIP. The updater checks the candidate in the native runtime, saves a complete backup, preserves the installed `mod.json`, and replaces the directory. Failed replacement or post-install validation restores the previous copy.
+
+An update waits until all registered owners have no pending approval work. A shared update transaction pauses their controllers without changing saved settings. After a source reload, the new owner reads the matching install receipt before resuming. Old code cannot finalize a newer version's success.
+
+## Runtime
+
+Native integration stays in `main.js`, `ui.js`, and `host.js`. The controller, parser, policy, and providers use injected IO. Approval controls use GPUI JavaScript, `hc`, and `/bin/sh`. Update checks use curl; update installation uses Python 3. Node is a development tool.
