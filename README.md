@@ -1,10 +1,8 @@
 # Herdr Approval
 
-You can read Codex permission requests and send replies from a Herdr panel.
-Optional automatic approval sends a reply after a delay that you set.
-Each agent has its own countdown, which you can cancel before it ends.
-Automatic approval is off by default and excludes options that allow all commands or bypass checks.
-The mod supports local Codex agents with English permission menus on macOS. Cockpit is optional.
+Herdr Approval shows local Codex permission requests in a compact panel. You can reply to each request manually.
+
+Automatic approval is off by default. When you turn it on, set a delay from 1 to 3600 seconds. Choose all Codex agents or only selected agents. Each agent has its own countdown, and you can cancel it before it ends.
 
 ![Compact Approval strip with its settings popup in a demo layout](preview.png)
 
@@ -59,15 +57,15 @@ Other mods can open a tab with `approvals.settings` or `approvals.requests`. The
 The mod requires these components:
 
 - Herdr desktop with native JavaScript mods and herdr-core 0.1.21 or a compatible version
-- macOS or Linux with `hc` and `/bin/sh` available to Herdr
-- A local Codex agent with the supported English permission menu.
+- `hc` and `/bin/sh` available to Herdr
+- A local Codex agent.
 
-Claude, remote agents, authentication prompts, text questions, and checkbox forms do not accept input through this version.
+This mod supports Codex only, and it does not support Claude Code. The Codex approval menu must be in English, but you can chat in any language. The mod is tested on macOS and is not validated on Linux.
+Remote agents are not supported. The mod does not answer authentication prompts, text questions, or checkbox forms.
 Supported requests include command execution and terminal input, such as Ctrl+C.
 Terminal input requires a complete target, environment, reason, quoted input, and confirmation menu.
 The quoted input must fit on one visible line. Wrapped or incomplete input remains manual.
 Normal approval controls require neither Node nor Python. Update checks use curl. Installation of an update requires Python 3.
-Validation used macOS. Linux is not yet validated.
 
 ## Updates
 
